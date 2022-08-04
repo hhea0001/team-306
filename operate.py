@@ -131,25 +131,26 @@ class Operate:
                                           False, text_colour)
         canvas.blit(caption_surface, (position[0], position[1]-25))
 
-    def set_direction(self, angle):
-        self.command['motion'] = [np.cos(angle), np.sin(angle)]
+    def set_velocity(self, linear, angular):
+        self.command['motion'] = [linear, angular]
 
     # keyboard teleoperation        
     def update_keyboard(self):
         for event in pygame.event.get():
             ############### add your codes below ###############
+            speed = 1
             # drive forward
             if event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
-                self.set_direction(0)
+                self.set_velocity(speed, 0)
             # drive backward
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN:
-                self.set_direction(np.PI)
+                self.set_velocity(-speed, 0)
             # turn left
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_LEFT:
-                self.set_direction(-np.PI/2)
+                self.set_velocity(0, speed)
             # drive right
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
-                self.set_direction(np.PI/2)
+                self.set_velocity(0, -speed)
             ####################################################
             # stop
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
