@@ -188,22 +188,26 @@ class Operate:
                                           False, text_colour)
         canvas.blit(caption_surface, (position[0], position[1]-25))
 
+    def set_velocity(self, linear, angular):
+        self.command['motion'] = [linear, angular]
+
     # keyboard teleoperation        
     def update_keyboard(self):
         for event in pygame.event.get():
-            ########### replace with your M1 codes ###########
+            ############### add your codes below ###############
+            speed = 1
             # drive forward
             if event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
-                pass # TODO: replace with your M1 code to make the robot drive forward
+                self.set_velocity(speed, 0)
             # drive backward
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN:
-                pass # TODO: replace with your M1 code to make the robot drive backward
+                self.set_velocity(-speed, 0)
             # turn left
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_LEFT:
-                pass # TODO: replace with your M1 code to make the robot turn left
+                self.set_velocity(0, speed)
             # drive right
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
-                pass # TODO: replace with your M1 code to make the robot turn right
+                self.set_velocity(0, -speed)
             ####################################################
             # stop
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
