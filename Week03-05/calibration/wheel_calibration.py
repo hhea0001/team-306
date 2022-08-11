@@ -16,7 +16,7 @@ def calibrateWheelRadius():
     # Feel free to change the range / step
     ##########################################
     wheel_velocities_range = range(20, 80, 15)
-    delta_times = []
+    delta_times = []#[11, 6.28, 4.40, 3.36]
 
     for wheel_vel in wheel_velocities_range:
         print("Driving at {} ticks/s.".format(wheel_vel))
@@ -59,7 +59,7 @@ def calibrateBaseline(scale):
     # Feel free to change the range / step
     ##########################################
     wheel_velocities_range = range(30, 60, 10)
-    delta_times = []
+    delta_times = []#[3.95, 2.98, 2.40]
 
     for wheel_vel in wheel_velocities_range:
         print("Driving at {} ticks/s.".format(wheel_vel))
@@ -86,7 +86,8 @@ def calibrateBaseline(scale):
     num = len(wheel_velocities_range)
     baseline = 0
     for delta_time, wheel_vel in zip(delta_times, wheel_velocities_range):
-        baseline += scale / num / delta_time / wheel_vel
+        delta_omega = 2 * np.pi / delta_time
+        baseline += 1 / num * (1 / delta_omega * scale * 2 * wheel_vel)
         pass # TODO: replace with your code to compute the baseline parameter using scale, wheel_vel, and delta_time
     print("The baseline parameter is estimated as {:.6f} m.".format(baseline))
 
@@ -110,6 +111,7 @@ if __name__ == "__main__":
     scale = calibrateWheelRadius()
     fileNameS = "{}scale.txt".format(dataDir)
     np.savetxt(fileNameS, np.array([scale]), delimiter=',')
+    #scale = 0.004555
 
     print('Calibrating PiBot baseline...\n')
     baseline = calibrateBaseline(scale)
