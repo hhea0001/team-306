@@ -87,10 +87,20 @@ class EKF:
     # the prediction step of EKF
     def predict(self, raw_drive_meas):
 
-        F = self.state_transition(raw_drive_meas)
+        # get current robot's state
         x = self.get_state_vector()
 
-        # TODO: add your codes here to compute the predicted x
+        # compute robot's state given the control input
+        self.robot.drive(raw_drive_meas)
+
+        # Get A using state_transition()
+        A = self.state_transition(raw_drive_meas)
+        
+        # Get Q using predict_covariance()
+        Q = self.predict_covariance(raw_drive_meas)
+        
+        # Update robot's uncertainty and update robot's state
+        self.P = A @ self.P @ A.T + Q
 
     # the update step of EKF
     def update(self, measurements):
@@ -110,12 +120,17 @@ class EKF:
         # Compute own measurements
         z_hat = self.robot.measure(self.markers, idx_list)
         z_hat = z_hat.reshape((-1,1),order="F")
-        H = self.robot.derivative_measure(self.markers, idx_list)
+        C = self.robot.derivative_measure(self.markers, idx_list)
 
         x = self.get_state_vector()
 
-        # TODO: add your codes here to compute the updated x
+        temp = C @ self.P @ C.T + R
+        K = self.P @ C.T @ np.linalg.inv(temp)
 
+        x = x + K @ (z - z_hat)
+
+        self.P = (np.eye(x.shape[0]) - K @ C) @ self.P
+        self.set_state_vector(x)
 
     def state_transition(self, raw_drive_meas):
         n = self.number_landmarks()*2 + 3
