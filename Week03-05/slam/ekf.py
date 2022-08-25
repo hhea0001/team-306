@@ -30,6 +30,7 @@ class EKF:
         f_ = f'./pics/8bit/lm_unknown.png'
         self.lm_pics.append(pygame.image.load(f_))
         self.pibot_pic = pygame.image.load(f'./pics/8bit/pibot_top.png')
+        self.prev_drive = None
         
     def reset(self):
         self.robot.state = np.zeros((3, 1))
@@ -86,7 +87,12 @@ class EKF:
 
     # the prediction step of EKF
     def predict(self, raw_drive_meas):
-
+        
+        if self.prev_drive is not None:
+            raw_drive_meas.blend(self.prev_drive)
+        
+        self.prev_drive = raw_drive_meas
+        
         # get current robot's state
         x = self.get_state_vector()
 
@@ -142,7 +148,7 @@ class EKF:
     def predict_covariance(self, raw_drive_meas):
         n = self.number_landmarks()*2 + 3
         Q = np.zeros((n,n))
-        Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas) + 0.01 * np.eye(3)
+        Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas) + 0.001 * np.eye(3)
         return Q
 
     def add_landmarks(self, measurements):

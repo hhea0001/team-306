@@ -15,3 +15,9 @@ class Drive:
         self.dt = dt
         self.left_cov = left_cov
         self.right_cov = right_cov
+        
+    def blend(self, other):
+        accel = 1
+        
+        self.left_speed = (1-accel) * other.left_speed + (accel) * self.left_speed
+        self.right_speed = (1-accel) * other.right_speed + (accel) * self.right_speed

@@ -65,8 +65,8 @@ class Operate:
         self.start_time = time.time()
         self.control_clock = time.time()
         # initialise images
-        self.img = np.zeros([240,320,3], dtype=np.uint8)
-        self.aruco_img = np.zeros([240,320,3], dtype=np.uint8)
+        self.img = np.zeros([480,640,3], dtype=np.uint8)
+        self.aruco_img = np.zeros([480,640,3], dtype=np.uint8)
         self.old_img = np.zeros([480,640,3], dtype=np.uint8)
         self.bg = pygame.image.load('pics/gui_mask.jpg')
 
