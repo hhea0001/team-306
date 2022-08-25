@@ -67,6 +67,7 @@ class Operate:
         # initialise images
         self.img = np.zeros([240,320,3], dtype=np.uint8)
         self.aruco_img = np.zeros([240,320,3], dtype=np.uint8)
+        self.old_img = np.zeros([480,640,3], dtype=np.uint8)
         self.bg = pygame.image.load('pics/gui_mask.jpg')
 
     # wheel control
@@ -88,6 +89,15 @@ class Operate:
         if not self.data is None:
             self.data.write_image(self.img)
 
+    def is_same_img(self):
+        diff = ((self.aruco_img - self.old_img)**2).mean()
+        
+        if diff > 0.01:
+            self.old_img = np.copy(self.aruco_img)
+            return False
+        return True
+        
+    
     # SLAM with ARUCO markers       
     def update_slam(self, drive_meas):
         lms, self.aruco_img = self.aruco_det.detect_marker_positions(self.img)
@@ -102,8 +112,10 @@ class Operate:
             self.request_recover_robot = False
         elif self.ekf_on: # and not self.debug_flag:
             self.ekf.predict(drive_meas)
-            self.ekf.add_landmarks(lms)
-            self.ekf.update(lms)
+            
+            if not self.is_same_img():
+                self.ekf.add_landmarks(lms)
+                self.ekf.update(lms)
 
     # save images taken by the camera
     def save_image(self):
@@ -195,7 +207,7 @@ class Operate:
     def update_keyboard(self):
         for event in pygame.event.get():
             ############### add your codes below ###############
-            speed = 1
+            speed = 3
             # drive forward
             if event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
                 self.set_velocity(speed, 0)
@@ -208,6 +220,8 @@ class Operate:
             # drive right
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
                 self.set_velocity(0, -speed)
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_j:
+                self.ekf.new_pic()
             ####################################################
             # stop
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
