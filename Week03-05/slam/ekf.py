@@ -20,7 +20,7 @@ class EKF:
         self.taglist = []
 
         # Covariance matrix
-        self.P = np.zeros((3,3))
+        self.P = np.zeros((5,5))
         self.init_lm_cov = 1e3
         self.robot_init_state = None
         self.lm_pics = []
@@ -33,11 +33,11 @@ class EKF:
         self.prev_drive = None
         
     def reset(self):
-        self.robot.state = np.zeros((3, 1))
+        self.robot.state = np.zeros((5, 1))
         self.markers = np.zeros((2,0))
         self.taglist = []
         # Covariance matrix
-        self.P = np.zeros((3,3))
+        self.P = np.zeros((5,5))
         self.init_lm_cov = 1e3
         self.robot_init_state = None
 
@@ -50,12 +50,12 @@ class EKF:
         return state
     
     def set_state_vector(self, state):
-        self.robot.state = state[0:3,:]
-        self.markers = np.reshape(state[3:,:], (2,-1), order='F')
+        self.robot.state = state[0:5,:]
+        self.markers = np.reshape(state[5:,:], (2,-1), order='F')
     
     def save_map(self, fname="slam_map.txt"):
         if self.number_landmarks() > 0:
-            utils = MappingUtils(self.markers, self.P[3:,3:], self.taglist)
+            utils = MappingUtils(self.markers, self.P[5:,5:], self.taglist)
             utils.save(fname)
 
     def recover_from_pause(self, measurements):
@@ -96,25 +96,35 @@ class EKF:
         # get current robot's state
         x = self.get_state_vector()
 
+        linear_velocity, angular_velocity = self.robot.convert_wheel_speeds(raw_drive_meas.left_speed, raw_drive_meas.right_speed)
+        
+        if (abs(linear_velocity) < 0.001):
+            linear_velocity = 0
+
+        if (abs(angular_velocity) < 0.001):
+            angular_velocity = 0
+
+        x[3] = linear_velocity
+        x[4] = angular_velocity
+
         # compute robot's state given the control input
         self.robot.drive(raw_drive_meas)
 
         # Get A using state_transition()
         A = self.state_transition(raw_drive_meas)
-        # print("A:")
-        # print(A[0:3,0:3])
                 
         # Get Q using predict_covariance()
         Q = self.predict_covariance(raw_drive_meas)
-        # print("Q:")
-        # print(Q[0:2,0:2])
                 
         # Update robot's uncertainty and update robot's state
         self.P = A @ self.P @ A.T + Q
 
+        x_hat = A@x
+        self.set_state_vector(x_hat)
+
     # the update step of EKF
     def update(self, measurements):
-        
+
         if not measurements:
             return
 
@@ -144,15 +154,18 @@ class EKF:
         self.set_state_vector(x)
 
     def state_transition(self, raw_drive_meas):
-        n = self.number_landmarks()*2 + 3
+        n = self.number_landmarks()*2 + 5
         F = np.eye(n)
-        F[0:3,0:3] = self.robot.derivative_drive(raw_drive_meas)
+        F[0:5,0:5] = self.robot.derivative_drive(raw_drive_meas)
         return F
     
     def predict_covariance(self, raw_drive_meas):
-        n = self.number_landmarks()*2 + 3
+        n = self.number_landmarks()*2 + 5
         Q = np.zeros((n,n))
-        Q[0:3,0:3] = self.robot.covariance_drive(raw_drive_meas) + 0.001 * np.eye(3)
+        E = 0.001 * np.eye(5)
+        E[3,3] = 0
+        E[4,4] = 0
+        Q[0:5,0:5] = self.robot.covariance_drive(raw_drive_meas) + E
         return Q
 
     def add_landmarks(self, measurements):
@@ -259,7 +272,7 @@ class EKF:
                 xy = (lms_xy[0, i], lms_xy[1, i])
                 coor_ = self.to_im_coor(xy, res, m2pixel)
                 # plot covariance
-                Plmi = self.P[3+2*i:3+2*(i+1),3+2*i:3+2*(i+1)]
+                Plmi = self.P[5+2*i:5+2*(i+1),5+2*i:5+2*(i+1)]
                 axes_len, angle = self.make_ellipse(Plmi)
                 canvas = cv2.ellipse(canvas, coor_, 
                     (int(axes_len[0]*m2pixel), int(axes_len[1]*m2pixel)),

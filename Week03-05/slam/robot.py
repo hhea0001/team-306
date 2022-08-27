@@ -2,8 +2,8 @@ import numpy as np
 
 class Robot:
     def __init__(self, wheels_width, wheels_scale, camera_matrix, camera_dist):
-        # State is a vector of [x,y,theta]'
-        self.state = np.zeros((3,1))
+        # State is a vector of [x,y,theta, linear_vel, angular_vel]'
+        self.state = np.zeros((5,1))
         
         # Wheel parameters
         self.wheels_width = wheels_width  # The distance between the left and right wheels
@@ -19,14 +19,24 @@ class Robot:
 
         # Compute the linear and angular velocity
         linear_velocity, angular_velocity = self.convert_wheel_speeds(drive_meas.left_speed, drive_meas.right_speed)
+        
+        if (abs(linear_velocity) < 0.001):
+            linear_velocity = 0
+
+        if (abs(angular_velocity) < 0.001):
+            angular_velocity = 0
+
+        self.state[3] = linear_velocity
+        self.state[4] = angular_velocity
 
         # Apply the velocities
+        th = self.state[2]
         dt = drive_meas.dt
+
         if angular_velocity == 0:
-            self.state[0] += np.cos(self.state[2]) * linear_velocity * dt
-            self.state[1] += np.sin(self.state[2]) * linear_velocity * dt
+            self.state[0] += np.cos(th) * linear_velocity * dt
+            self.state[1] += np.sin(th) * linear_velocity * dt
         else:
-            th = self.state[2]
             self.state[0] += linear_velocity / angular_velocity * (np.sin(th+dt*angular_velocity) - np.sin(th))
             self.state[1] += -linear_velocity / angular_velocity * (np.cos(th+dt*angular_velocity) - np.cos(th))
             self.state[2] += dt*angular_velocity
@@ -66,29 +76,35 @@ class Robot:
 
     def derivative_drive(self, drive_meas):
         # Compute the differential of drive w.r.t. the robot state
-        DFx = np.zeros((3,3))
-        DFx[0,0] = 1
-        DFx[1,1] = 1
-        DFx[2,2] = 1
-
-        lin_vel, ang_vel = self.convert_wheel_speeds(drive_meas.left_speed, drive_meas.right_speed)
+        DFx = np.eye(5)
 
         dt = drive_meas.dt
         th = self.state[2]
+        
+        lin_vel = self.state[3]
+        ang_vel = self.state[4]
+
+        th2 = th + dt*ang_vel
 
         if ang_vel == 0:
-            DFx[0,2] = -np.sin(th) * lin_vel * dt
-            DFx[1,2] = np.cos(th) * lin_vel * dt
+            DFx[0,3] = dt*np.cos(th)
+            DFx[1,3] = dt*np.sin(th)
         else:
-            DFx[0,2] = lin_vel / ang_vel * (np.cos(th+dt*ang_vel) - np.cos(th))
-            DFx[1,2] = lin_vel / ang_vel * (np.sin(th+dt*ang_vel) - np.sin(th))
+            DFx[0,3] = 1/ang_vel * (np.sin(th2) - np.sin(th))
+            DFx[0,4] = -lin_vel/(ang_vel**2) * (np.sin(th2) - np.sin(th)) + \
+                            lin_vel / ang_vel * (dt * np.cos(th2))
+
+            DFx[1,3] = -1/ang_vel * (np.cos(th2) - np.cos(th))
+            DFx[1,4] = lin_vel/(ang_vel**2) * (np.cos(th2) - np.cos(th)) + \
+                            -lin_vel / ang_vel * (-dt * np.sin(th2))
+            DFx[2,4] = dt
         
         return DFx
 
     def derivative_measure(self, markers, idx_list):
         # Compute the derivative of the markers in the order given by idx_list w.r.t. robot and markers
         n = 2*len(idx_list)
-        m = 3 + 2*markers.shape[1]
+        m = 5 + 2*markers.shape[1]
 
         DH = np.zeros((n,m))
 
@@ -106,11 +122,11 @@ class Robot:
             # lmj_bff = Rot_theta.T @ (lmj_inertial - robot_xy)
 
             # robot xy DH
-            DH[2*i:2*i+2,0:2] = - Rot_theta.T
+            DH[2*i:2*i+2, 0:2] = - Rot_theta.T
             # robot theta DH
             DH[2*i:2*i+2, 2:3] = DRot_theta.T @ (lmj_inertial - robot_xy)
             # lm xy DH
-            DH[2*i:2*i+2, 3+2*j:3+2*j+2] = Rot_theta.T
+            DH[2*i:2*i+2, 5+2*j:5+2*j+2] = Rot_theta.T
 
             # print(DH[i:i+2,:])
 
@@ -121,13 +137,18 @@ class Robot:
         Jac1 = np.array([[self.wheels_scale/2, self.wheels_scale/2],
                 [-self.wheels_scale/self.wheels_width, self.wheels_scale/self.wheels_width]])
 
-        lin_vel, ang_vel = self.convert_wheel_speeds(drive_meas.left_speed, drive_meas.right_speed)
+        #lin_vel, ang_vel = self.convert_wheel_speeds(drive_meas.left_speed, drive_meas.right_speed)
         th = self.state[2]
+        lin_vel = self.state[3]
+        ang_vel = self.state[4]
         dt = drive_meas.dt
         th2 = th + dt*ang_vel
 
-        # Derivative of x,y,theta w.r.t. lin_vel, ang_vel
-        Jac2 = np.zeros((3,2))
+        # Derivative of x,y,theta, lin_vel, ang_vel w.r.t. lin_vel, ang_vel
+        Jac2 = np.zeros((5,2))
+
+        Jac2[3, 0] = 1
+        Jac2[4, 1] = 1
 
         if (ang_vel < 0.0001):
             ang_vel = 0
@@ -145,7 +166,7 @@ class Robot:
                             -lin_vel / ang_vel * (-dt * np.sin(th2))
             Jac2[2,1] = dt
 
-        # Derivative of x,y,theta w.r.t. left_speed, right_speed
+        # Derivative of x,y,theta, lin_vel, ang_vel w.r.t. left_speed, right_speed
         Jac = Jac2 @ Jac1
 
         # Compute covariance
