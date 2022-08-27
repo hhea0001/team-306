@@ -220,8 +220,6 @@ class Operate:
             # drive right
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
                 self.set_velocity(0, -speed)
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_j:
-                self.ekf.new_pic()
             ####################################################
             # stop
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
