@@ -67,7 +67,7 @@ class Operate:
         # initialise images
         self.img = np.zeros([480,640,3], dtype=np.uint8)
         self.aruco_img = np.zeros([480,640,3], dtype=np.uint8)
-        self.old_img = np.zeros([480,640,3], dtype=np.uint8)
+        self.old_img = None
         self.bg = pygame.image.load('pics/gui_mask.jpg')
 
     # wheel control
@@ -90,12 +90,16 @@ class Operate:
             self.data.write_image(self.img)
 
     def is_same_img(self):
-        diff = ((self.aruco_img - self.old_img)**2).mean()
-        
-        if diff > 0.01:
-            self.old_img = np.copy(self.aruco_img)
-            return False
-        return True
+        same_image = True
+
+        if isinstance(self.old_img, np.ndarray) and isinstance(self.aruco_img, np.ndarray):
+            if self.old_img.shape[0] == self.aruco_img.shape[0] and self.old_img.shape[1] == self.aruco_img.shape[1]:
+                diff = ((self.aruco_img - self.old_img)**2).mean()
+                if diff > 0.01:
+                    same_image = False
+
+        self.old_img = self.aruco_img
+        return same_image
         
     
     # SLAM with ARUCO markers       
