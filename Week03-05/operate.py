@@ -90,13 +90,13 @@ class Operate:
             self.data.write_image(self.img)
 
     def is_same_img(self):
-        same_image = True
+        same_image = False
 
         if isinstance(self.old_img, np.ndarray) and isinstance(self.aruco_img, np.ndarray):
             if self.old_img.shape[0] == self.aruco_img.shape[0] and self.old_img.shape[1] == self.aruco_img.shape[1]:
                 diff = ((self.aruco_img - self.old_img)**2).mean()
-                if diff > 0.01:
-                    same_image = False
+                if diff < 0.01:
+                    same_image = True
 
         self.old_img = self.aruco_img
         return same_image
