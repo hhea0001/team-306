@@ -207,7 +207,7 @@ class Operate:
     def update_keyboard(self):
         for event in pygame.event.get():
             ############### add your codes below ###############
-            speed = 3
+            speed = 1
             # drive forward
             if event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
                 self.set_velocity(speed, 0)
