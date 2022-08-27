@@ -101,9 +101,13 @@ class EKF:
 
         # Get A using state_transition()
         A = self.state_transition(raw_drive_meas)
+        # print("A:")
+        # print(A[0:3,0:3])
                 
         # Get Q using predict_covariance()
         Q = self.predict_covariance(raw_drive_meas)
+        # print("Q:")
+        # print(Q[0:2,0:2])
                 
         # Update robot's uncertainty and update robot's state
         self.P = A @ self.P @ A.T + Q
@@ -244,6 +248,8 @@ class EKF:
         
         p_robot = self.P[0:2,0:2]
         axes_len,angle = self.make_ellipse(p_robot)
+        #print(self.P[0:2,0:2])
+        #print(axes_len, angle)
         canvas = cv2.ellipse(canvas, start_point_uv, 
                     (int(axes_len[0]*m2pixel), int(axes_len[1]*m2pixel)),
                     angle, 0, 360, (0, 30, 56), 1)

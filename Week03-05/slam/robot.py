@@ -120,7 +120,7 @@ class Robot:
         # Derivative of lin_vel, ang_vel w.r.t. left_speed, right_speed
         Jac1 = np.array([[self.wheels_scale/2, self.wheels_scale/2],
                 [-self.wheels_scale/self.wheels_width, self.wheels_scale/self.wheels_width]])
-        
+
         lin_vel, ang_vel = self.convert_wheel_speeds(drive_meas.left_speed, drive_meas.right_speed)
         th = self.state[2]
         dt = drive_meas.dt
@@ -128,6 +128,9 @@ class Robot:
 
         # Derivative of x,y,theta w.r.t. lin_vel, ang_vel
         Jac2 = np.zeros((3,2))
+
+        if (ang_vel < 0.0001):
+            ang_vel = 0
         
         if ang_vel == 0:
             Jac2[0,0] = dt*np.cos(th)
