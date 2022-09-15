@@ -99,28 +99,54 @@ def print_target_fruits_pos(search_list, fruit_list, fruit_true_pos):
 # you may use different motion model parameters for robot driving on its own or driving while pushing a fruit
 # try changing to a fully automatic delivery approach: develop a path-finding algorithm that produces the waypoints
 def drive_to_point(waypoint, robot_pose):
-    # imports camera / wheel calibration parameters 
+    # imports camera / wheel calibration parameters
     fileS = "calibration/param/scale.txt"
     scale = np.loadtxt(fileS, delimiter=',')
     fileB = "calibration/param/baseline.txt"
     baseline = np.loadtxt(fileB, delimiter=',')
-    
+
     ####################################################
     # TODO: replace with your codes to make the robot drive to the waypoint
     # One simple strategy is to first turn on the spot facing the waypoint,
     # then drive straight to the way point
 
     wheel_vel = 30 # tick
-    
-    # turn towards the waypoint
-    turn_time = 0.0 # replace with your calculation
-    print("Turning for {:.2f} seconds".format(turn_time))
-    ppi.set_velocity([0, 1], turning_tick=wheel_vel, time=turn_time)
-    
-    # after turning, drive straight to the waypoint
-    drive_time = 0.0 # replace with your calculation
-    print("Driving for {:.2f} seconds".format(drive_time))
-    ppi.set_velocity([1, 0], tick=wheel_vel, time=drive_time)
+    xG, yG = waypoints
+    xK, yK, thK = robot_pose
+
+    delta_t = 0.01
+    k_pw = 1
+    k_pv = 1
+
+    deltaY = yG-yK
+    deltaX = xG-xK
+
+    thG = np.atan2(deltaY,deltaX)
+
+    errorTh = thG-thK
+    errorPos = np.sqrt(np.square(deltaY)+np.square(deltaX))
+
+    threshold = 0.1
+
+    stop_criteria_met = False
+
+    # PID integration
+    while not stop_criteria_met:
+        w_k = k_pw*errorTh
+        v_k = k_pv*errorPos
+
+        # self.robot.drive(v_k, w_k, delta_time)
+        new_pose = get_robot_pose()
+        xK, yK, thK = new_pose
+
+        deltaY = yG-yK
+        deltaX = xG-xK
+        errorTh = thG-thK
+        errorPos = np.sqrt(np.square(deltaY)+np.square(deltaX))
+
+        if errorPos < threshold and errorTh < threshold:
+            stop_criteria_met = True
+
     ####################################################
 
     print("Arrived at [{}, {}]".format(waypoint[0], waypoint[1]))
