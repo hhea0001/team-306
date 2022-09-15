@@ -16,10 +16,6 @@ FRUIT_SIZES = {
     "orange": [0.0721, 0.0771, 0.0739],
     "strawberry": [0.052, 0.0346, 0.0376],
     "person": [1, 1, 1]
-    
-    
-    hello
-    
 }
 
 class BoundingBox:
