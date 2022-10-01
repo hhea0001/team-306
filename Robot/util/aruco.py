@@ -1,4 +1,4 @@
-# detect ARUCO markers and estimate their positions
+
 from typing import List, Tuple
 import numpy as np
 import cv2

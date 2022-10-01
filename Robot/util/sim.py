@@ -69,6 +69,7 @@ class Simulation:
     
     def update(self, landmarks = np.zeros((0, 1)), fruits = np.zeros((0, 1))):
         pass
+        #fruits = __get_or_add_fruits(fruits)
 
 class SimRobot:
     def __init__(self, wheels_width, wheels_scale):
