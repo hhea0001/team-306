@@ -1,10 +1,13 @@
 
 import time
+from typing import List, Tuple
 import numpy as np
+from util.fruit import FRUIT_TYPES
 
 from util.pibot import PenguinPi as Robot
-from util.sim import RobotSim
+from util.sim import Simulation, SimRobot
 from util.window import Window
+from util.aruco import ArucoDetector
 import util.window as win
 
 class Team306:
@@ -15,12 +18,15 @@ class Team306:
             port = port
         )
         # Setup simulated robot
-        self.sim = RobotSim(
-            map_data = map_data, 
-            camera_matrix = camera_matrix, 
-            wheels_scale = scale, 
-            wheels_width = baseline
+        self.sim = Simulation(
+            map_data = map_data,
+            sim_robot = SimRobot(
+                wheels_width = baseline, 
+                wheels_scale = scale
+            )
         )
+        # Setup aruco detector
+        self.aruco_detector = ArucoDetector(camera_matrix)
         # Initialise time
         self.previous_time = time.time()
         # Initialise image
@@ -49,6 +55,13 @@ class Team306:
         angular_vel = 0
         return linear_vel, angular_vel
     
+    def __detect_aruco_landmarks(self) -> List[Tuple[str, np.ndarray]]:
+        landmarks, marked_image = self.aruco_detector.detect_marker_positions(self.image)
+        return landmarks
+
+    def __detect_fruits(self) -> List[Tuple[str, np.ndarray]]:
+        return []
+    
     def drive(self):
         # Update time
         current_time = time.time()
@@ -57,13 +70,17 @@ class Team306:
         # Update robot velocity
         linear_vel, angular_vel = self.__solve_velocity()
         left_vel, right_vel = self.robot.set_velocity([linear_vel, angular_vel])
-        # Update sim velocity
-        self.sim.drive(left_vel, right_vel, dt)
-
-    def slam(self):
+        # Predict in simulation
+        self.sim.predict(left_vel, right_vel, dt)
+    
+    def view(self):
         if self.__try_get_new_image():
-            measurements = [] #self.aruco_det.detect_marker_positions(self.image) # TODO
-            self.sim.update(measurements)
+            # Detect aruco landmarks
+            landmarks = self.__detect_aruco_landmarks()
+            # Detect fruits
+            fruits = self.__detect_fruits()
+            # Update sim
+            self.sim.update(landmarks = landmarks, fruits = fruits)
         
 
 if __name__ == "__main__":
@@ -109,7 +126,7 @@ if __name__ == "__main__":
     # Run operation loop
     while True:
         team306.drive()
-        team306.slam()
+        team306.view()
 
         window.draw_text(str(team306.sim.state), (0, 0))
         window.update()
