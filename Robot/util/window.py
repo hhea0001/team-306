@@ -1,5 +1,6 @@
 
 import os
+import numpy as np
 import pygame
 import pygame.display as display
 
@@ -45,3 +46,10 @@ class Window:
         elif centre == TEXT_CENTRE:
             x -= text.get_width() / 2
         self.canvas.blit(text, (x, y))
+
+    def draw_image(self, image: np.ndarray):
+        cv2_img = np.rot90(image)
+        view = pygame.surfarray.make_surface(cv2_img)
+        view = pygame.transform.scale(view, (320, 240))
+        view = pygame.transform.flip(view, True, False)
+        self.canvas.blit(view, (0,0))

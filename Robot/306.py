@@ -1,9 +1,10 @@
 
+import json
 import time
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 import numpy as np
 from util.fruit import FRUIT_TYPES
-
+from util.landmark import Landmark
 from util.pibot import PenguinPi as Robot
 from util.sim import Simulation, SimRobot
 from util.window import Window
@@ -31,6 +32,7 @@ class Team306:
         self.previous_time = time.time()
         # Initialise image
         self.image = np.zeros([480,640,3], dtype=np.uint8)
+        self.marked_image = np.zeros([480,640,3], dtype=np.uint8)
 
     def __get_position(self):
         return self.sim.state[0:2]
@@ -52,15 +54,15 @@ class Team306:
     
     def __solve_velocity(self):
         linear_vel = 0
-        angular_vel = 0
+        angular_vel = 1
         return linear_vel, angular_vel
     
-    def __detect_aruco_landmarks(self) -> List[Tuple[str, np.ndarray]]:
-        landmarks, marked_image = self.aruco_detector.detect_marker_positions(self.image)
-        return landmarks
+    def __detect_aruco_markers(self) -> Dict[str, Landmark]:
+        markers, self.marked_image = self.aruco_detector.detect_marker_positions(self.image)
+        return markers
 
-    def __detect_fruits(self) -> List[Tuple[str, np.ndarray]]:
-        return []
+    def __detect_fruits(self) -> Dict[str, Landmark]:
+        return {}
     
     def drive(self):
         # Update time
@@ -76,11 +78,11 @@ class Team306:
     def view(self):
         if self.__try_get_new_image():
             # Detect aruco landmarks
-            landmarks = self.__detect_aruco_landmarks()
+            markers = self.__detect_aruco_markers()
             # Detect fruits
             fruits = self.__detect_fruits()
             # Update sim
-            self.sim.update(landmarks = landmarks, fruits = fruits)
+            self.sim.update(markers = markers, fruits = fruits)
         
 
 if __name__ == "__main__":
@@ -108,7 +110,8 @@ if __name__ == "__main__":
     if args.map == '':
         map_data = {}
     else:
-        map_data = {} # TODO
+        with open(args.map, 'r') as f:
+            map_data = json.load(f)
 
     # Setup robot & robot simulation
     team306 = Team306(
@@ -128,7 +131,8 @@ if __name__ == "__main__":
         team306.drive()
         team306.view()
 
-        window.draw_text(str(team306.sim.state), (0, 0))
+        window.draw_image(team306.marked_image)
+        window.draw_text(str(team306.sim.robot.state), (0, 0))
         window.update()
 
         if window.quit:
