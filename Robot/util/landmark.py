@@ -2,6 +2,8 @@
 import numpy as np
 
 class Landmark:
-    def __init__(self, position, covariance = np.array([1.0, 1.0])):
+    # Measurements are of landmarks in 2D and have a position as well as tag id.
+    def __init__(self, position, tag, covariance = (0.1*np.eye(2))):
         self.position = position
+        self.tag = tag
         self.covariance = covariance

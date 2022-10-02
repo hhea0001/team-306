@@ -20,9 +20,9 @@ class ArucoDetector:
         rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.marker_length, self.camera_matrix, self.distortion_params)
         # rvecs, tvecs = cv2.aruco.estimatePoseSingleMarkers(corners, self.marker_length, self.camera_matrix, self.distortion_params) # use this instead if you got a value error
         if ids is None:
-            return {}, image
+            return [], image
         # Compute the marker positions
-        measurements = {}
+        measurements = []
         seen_ids = []
         for i in range(len(ids)):
             idi = ids[i,0]
@@ -34,8 +34,8 @@ class ArucoDetector:
             lm_tvecs = tvecs[ids==idi].T
             lm_bff2d = np.block([[lm_tvecs[2,:]],[-lm_tvecs[0,:]]])
             lm_bff2d = np.mean(lm_bff2d, axis=1).reshape(-1,1)
-            #lm_measurement = Landmark(lm_bff2d, idi, covariance=0)
-            measurements["aruco" + str(idi) + "_0"] = Landmark(np.array([lm_bff2d[0,0], lm_bff2d[1,0]]), np.array([0.0, 0.0]))
+            lm_measurement = Landmark(lm_bff2d, "aruco" + str(idi) + "_0")
+            measurements.append(lm_measurement)
         # Draw markers on image copy
         img_marked = image.copy()
         cv2.aruco.drawDetectedMarkers(img_marked, corners, ids)

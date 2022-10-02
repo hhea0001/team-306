@@ -1,98 +1,43 @@
 
+from collections import OrderedDict
 from typing import Dict, List, Tuple
 import numpy as np
 
 from util.landmark import Landmark
 
 class Simulation:
-    def __init__(self, map_data, sim_robot):
-        self.robot: SimRobot = sim_robot
-        self.robot_P = np.zeros((len(self.robot.state),))
-        self.markers: Dict[str, np.ndarray] = self.__parse_markers(map_data)
-        self.fruits: Dict[str, np.ndarray] = self.__parse_fruit(map_data)
-        # Minimum distance to determine whether or not two fruit are the same
-        self.fruit_distance: float = 1.0
-        self.dict = {}
+
+    def __init__(self, sim_robot, map_data):
+        # State components
+        self.robot = sim_robot
+        self.markers, self.taglist = self.__parse_map_data(map_data)
+        # Covariance matrix
+        self.P = np.zeros((self.__get_state_length(), self.__get_state_length()))
+        self.init_lm_cov = 1e3
+    
+    def __parse_map_data(self, map_data):
+        taglist = {}
+        landmarks = np.zeros((2, 0))
+        for key in map_data:
+            taglist[key] = len(taglist)
+            position = np.reshape(np.array([map_data[key]["x"],map_data[key]["y"]]),(-1,1), order='F')
+            landmarks = np.concatenate((landmarks, position), axis=1)
+        return landmarks, taglist
 
     def __get_state_length(self):
-        return len(self.robot.state) + 2 * (len(self.markers) + len(self.fruits))
+        return len(self.robot.state) + 2 * self.__get_landmarks_length()
+
+    def __get_landmarks_length(self):
+        return int(self.markers.shape[1])
 
     def __get_state_vector(self):
-        # Create markers array
-        self.dict = {}
-        i = len(self.robot.state)
-        markers = []
-        for id in self.markers:
-            markers.append(self.markers[id][0:2])
-            self.dict[id] = i
-            i += 2
-        markers = np.array(markers).flatten()
-        # Create fruit array
-        fruits = []
-        for id in self.fruits:
-            fruits.append(self.fruits[id][0:2])
-            self.dict[id] = i
-            i += 2
-        fruits = np.array(fruits).flatten()
-        # Create state array
-        state = np.concatenate((self.robot.state, markers, fruits), axis=0)
+        state = np.concatenate(
+            (self.robot.state, np.reshape(self.markers, (-1,1), order='F')), axis=0)
         return state
     
     def __set_state_vector(self, state):
-        index = len(self.robot.state)
-        self.robot.state = state[0:index]        
-        # Update each marker
-        for id in self.markers:
-            self.markers[id][0:2] = state[index:index+2]
-            index += 2
-        # Update each fruit
-        for id in self.fruits:
-            self.fruits[id][0:2] = state[index:index+2]
-            index += 2
-    
-    def __get_P_matrix(self):
-        # Create markers array
-        markers = []
-        for id in self.markers:
-            markers.append(self.markers[id][2:4])
-        markers = np.array(markers).flatten()
-        # Create fruit array
-        fruits = []
-        for id in self.fruits:
-            fruits.append(self.fruits[id][2:4])
-        fruits = np.array(fruits).flatten()
-        # Create state array
-        vector = np.concatenate((self.robot_P, markers, fruits), axis=0)
-        matrix = np.diag(vector)
-        return matrix
-
-    def __set_P_matrix(self, P):
-        vector = np.diag(P)
-        index = len(self.robot_P)
-        self.robot_P = vector[0:index]        
-        # Update each marker
-        for id in self.markers:
-            self.markers[id][2:4] = vector[index:index+2]
-            index += 2
-        # Update each fruit
-        for id in self.fruits:
-            self.fruits[id][2:4] = vector[index:index+2]
-            index += 2
-    
-    def __parse_markers(self, map_data):
-        markers = {}
-        for key in map_data:
-            if "aruco" in key:
-                print(map_data[key])
-                markers[key] = np.array([map_data[key]["x"],map_data[key]["y"], 0, 0])
-        return markers
-
-    def __parse_fruit(self, map_data):
-        fruits = {}
-        for key in map_data:
-            if "aruco" not in key:
-                fruits[key] = np.array([map_data[key]["x"],map_data[key]["y"], 0, 0])
-        return fruits
+        self.robot.state = state[0:5,:]
+        self.markers = np.reshape(state[5:,:], (2,-1), order='F')
 
     def __state_transition(self, dt):
         n = self.__get_state_length()
@@ -107,127 +52,64 @@ class Simulation:
         E[3:5,3:5] = 0
         Q[0:5,0:5] = self.robot.drive_covariance(dt) + E
         return Q
-
-    def __transform_landmarks(self, landmarks: List[Landmark]):
+    
+    def __add_landmarks(self, measurements):
         th = self.robot.state[2]
-        robot_xy = self.robot.state[0:2]
+        robot_xy = self.robot.state[0:2,:]
         R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
-        for key in landmarks:
-            landmarks[key].position = robot_xy + R_theta @ landmarks[key].position
+        # Add new landmarks to the state
+        for lm in measurements:
+            if lm.tag in self.taglist:
+                # ignore known tags
+                continue
+            lm_bff = lm.position
+            lm_inertial = robot_xy + R_theta @ lm_bff
+            self.taglist[lm.tag] = len(self.taglist)
+            self.markers = np.concatenate((self.markers, lm_inertial), axis=1)
+            # Create a simple, large covariance to be fixed by the update step
+            self.P = np.concatenate((self.P, np.zeros((2, self.P.shape[1]))), axis=0)
+            self.P = np.concatenate((self.P, np.zeros((self.P.shape[0], 2))), axis=1)
+            self.P[-2,-2] = self.init_lm_cov**2
+            self.P[-1,-1] = self.init_lm_cov**2
     
-    def __add_landmarks(self, landmarks, dictionary):
-        for key in landmarks:
-            if key not in dictionary:
-                dictionary[key] = np.array([landmarks[key].position[0], landmarks[key].position[1], 10000, 10000])
-    
-    def __find_fruits(self, fruits: Dict[str, Landmark]):
-        pass
-
-    def __add_fruits(self, fruits: Dict[str, Landmark]):
-        self.__add_landmarks(fruits, self.fruits)
-    
-    def __add_markers(self, markers: Dict[str, Landmark]):
-        self.__add_landmarks(markers, self.markers)
-    
-    # def __get_marker_index(self, key):
-    #     i = 0
-    #     if key in self.markers:
-    #         for marker in self.markers:
-    #             if key == marker:
-    #                 return i
-    #             i += 1
-    #     i = -1
-
-    # def __get_fruit_index(self, key):
-    #     i = 0
-    #     if key in self.markers:
-    #         for marker in self.markers:
-    #             if key == marker:
-    #                 return i
-    #             i += 1
-    #     i = -1
-                
-
+    # def save_map(self, fname="slam_map.txt"):
+    #     if self.number_landmarks() > 0:
+    #         utils = MappingUtils(self.markers, self.P[5:,5:], self.taglist)
+    #         utils.save(fname)
+        
     def predict(self, left_vel, right_vel, dt):
         self.robot.drive(left_vel, right_vel, dt)
         A = self.__state_transition(dt)
         Q = self.__predict_covariance(dt)
-        self.__set_P_matrix(A @ self.__get_P_matrix() @ A.T + Q)
-    
-    def update(self, markers: Dict[str, Landmark] = {}, fruits: Dict[str, Landmark] = {}):
-        # Markers
-        self.__transform_landmarks(markers)
-        self.__add_markers(markers)
-        # Fruit
-        self.__transform_landmarks(fruits)
-        self.__find_fruits(fruits)
-        self.__add_fruits(fruits)
-        
-        marker_keys = markers.keys()
-        fruit_keys = fruits.keys()
+        self.P = A @ self.P @ A.T + Q
 
-        robot_xy = self.robot.state[0:2]
-        th = self.robot.state[2]        
-        Rot_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
-        DRot_theta = np.block([[-np.sin(th), -np.cos(th)],[np.cos(th), -np.sin(th)]])
-
-        z = np.zeros((0,))
-        R = np.zeros((0,))
-        z_hat = np.zeros((0,))
-
-        if len(markers) > 0:
-            positions = [markers[key].position for key in marker_keys]
-            z = np.concatenate((z, *positions), axis = 0)
-            R = np.concatenate((R, *[markers[key].covariance for key in marker_keys]), axis = 0)
-            z_hat = np.concatenate((z_hat, *[self.markers[key][0:2] for key in marker_keys]), axis = 0)
-        
-        if len(fruits) > 0:
-            positions = [fruits[key].position for key in fruit_keys]
-            z = np.concatenate((z, *positions), axis = 0)
-            R = np.concatenate((R, *[fruits[key].covariance for key in marker_keys]), axis = 0)
-            z_hat = np.concatenate((z_hat, *[self.fruits[key][0:2] for key in fruit_keys]), axis = 0)
-        
-        #print(C)
-        #print(C.shape)
-
-        #C = np.eye(len(z), self.__get_state_length())
-        #C[0:5, 0:5] = self.robot.drive_derivative(1)
-
-        R = np.diag(R)
-        P = self.__get_P_matrix()
+    def update(self, measurements):
+        if not measurements:
+            return
+        self.__add_landmarks(measurements)
+        # Construct measurement index list
+        tags = [lm.tag for lm in measurements]
+        idx_list = [self.taglist[tag] for tag in tags]
+        # Stack measurements and set covariance
+        z = np.concatenate([lm.position.reshape(-1,1) for lm in measurements], axis=0)
+        R = np.zeros((2*len(measurements),2*len(measurements)))
+        for i in range(len(measurements)):
+            R[2*i:2*i+2,2*i:2*i+2] = measurements[i].covariance
+        # Compute own measurements
+        z_hat = self.robot.measure(self.markers, idx_list)
+        z_hat = z_hat.reshape((-1,1),order="F")
+        C = self.robot.measure_dt(self.markers, idx_list)
         x = self.__get_state_vector()
-
-        C = np.zeros((len(z), self.__get_state_length()))
-        i = 0
-        for key in marker_keys:
-            j = self.dict[key]
-            C[i, j] = 1
-            C[i + 1, j + 1] = 1
-            i += 2
-            print(j)
-        for key in fruit_keys:
-            j = self.dict[key]
-            C[i, j] = 1
-            C[i + 1, j + 1] = 1
-            i += 2
-            
-        print(C)
-        
-
-        temp = C @ P @ C.T + R
-        K = P @ C.T @ np.linalg.inv(temp)
-
+        temp = C @ self.P @ C.T + R
+        K = self.P @ C.T @ np.linalg.inv(temp)
         x = x + K @ (z - z_hat)
-
-        P = (np.eye(x.shape[0]) - K @ C) @ P
-
-        self.__set_P_matrix(P)
+        self.P = (np.eye(x.shape[0]) - K @ C) @ self.P
         self.__set_state_vector(x)
 
 class SimRobot:
     def __init__(self, wheels_width, wheels_scale):
         # Initialise state
-        self.state = np.zeros((5,))
+        self.state = np.zeros((5,1))
         # Setup parameters
         self.wheels_width = wheels_width
         self.wheels_scale = wheels_scale
@@ -312,6 +194,47 @@ class SimRobot:
         cov = np.diag((1, 1)) # Left wheel covariance, right wheel covariance
         cov = Jac @ cov @ Jac.T
         return cov
+    
+    def measure(self, markers, idx_list):
+        # Markers are 2d landmarks in a 2xn structure where there are n landmarks.
+        # The index list tells the function which landmarks to measure in order.
+        # Construct a 2x2 rotation matrix from the robot angle
+        th = self.state[2]
+        Rot_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
+        robot_xy = self.state[0:2,:]
+        measurements = []
+        for idx in idx_list:
+            marker = markers[:,idx:idx+1]
+            marker_bff = Rot_theta.T @ (marker - robot_xy)
+            measurements.append(marker_bff)
+        # Stack the measurements in a 2xm structure.
+        markers_bff = np.concatenate(measurements, axis=1)
+        return markers_bff
+    
+    def measure_dt(self, markers, idx_list):
+        # Compute the derivative of the markers in the order given by idx_list w.r.t. robot and markers
+        robot_state_length = self.state.shape[0]
+        n = 2*len(idx_list)
+        m = robot_state_length + 2*markers.shape[1]
+        DH = np.zeros((n,m))
+        robot_xy = self.state[0:2,:]
+        th = self.state[2]        
+        Rot_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
+        DRot_theta = np.block([[-np.sin(th), -np.cos(th)],[np.cos(th), -np.sin(th)]])
+        for i in range(n//2):
+            j = idx_list[i]
+            # i identifies which measurement to differentiate.
+            # j identifies the marker that i corresponds to.
+            lmj_inertial = markers[:,j:j+1]
+            # lmj_bff = Rot_theta.T @ (lmj_inertial - robot_xy)
+            # robot xy DH
+            DH[2*i:2*i+2, 0:2] = - Rot_theta.T
+            # robot theta DH
+            DH[2*i:2*i+2, 2:3] = DRot_theta.T @ (lmj_inertial - robot_xy)
+            # lm xy DH
+            DH[2*i:2*i+2, robot_state_length+2*j:robot_state_length+2*j+2] = Rot_theta.T
+            # print(DH[i:i+2,:])
+        return DH
 
 if __name__ == "__main__":
     sim = Simulation(

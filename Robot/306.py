@@ -62,7 +62,7 @@ class Team306:
         return markers
 
     def __detect_fruits(self) -> Dict[str, Landmark]:
-        return {}
+        return []
     
     def drive(self):
         # Update time
@@ -82,7 +82,7 @@ class Team306:
             # Detect fruits
             fruits = self.__detect_fruits()
             # Update sim
-            self.sim.update(markers = markers, fruits = fruits)
+            self.sim.update([*markers, *fruits])
         
 
 if __name__ == "__main__":
