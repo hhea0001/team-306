@@ -44,6 +44,9 @@ class Planner:
         self.current_plan = []
         self.angle = 0
     
+    def has_next_goal(self):
+        return (self.i + 1) < len(self.current_plan)
+    
     def get_next_goal(self):
         self.i += 1
         if self.i >= len(self.current_plan):
@@ -61,6 +64,7 @@ class Planner:
     def plan(self, start, goal):
         self.start = Node(start[0], start[1])
         self.goal = Node(goal[0], goal[1])
+        self.current_plan = []
         self.angle = goal[2]
         self.i = 0
         self.node_list = [self.start]
@@ -110,6 +114,7 @@ class Planner:
             node = node.parent
         path.append([node.x, node.y])
         path.reverse()
+        path.pop()
         return path
 
     def calc_dist_to_goal(self, x, y):

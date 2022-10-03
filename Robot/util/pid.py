@@ -6,6 +6,7 @@ from util.sim import SimRobot, Simulation
 LOOK_AT_GOAL = 0
 MOVE_TO_GOAL = 1
 ORIENT_TO_GOAL = 2
+FINISHED = 3
 
 class RobotPID:
     def __init__(self, sim_robot: SimRobot, distance_criteria = 0.01, angle_criteria = 0.01, goal = np.array([0, 0, 0]), K = np.array([10, 20, 10]), margin = 50):
@@ -17,7 +18,7 @@ class RobotPID:
         self.K = np.zeros_like(self.Kg)
         self.error = np.array([0.0, 0.0, 0.0])
         self.update_error()
-        self.state = LOOK_AT_GOAL
+        self.state = FINISHED
         self.margin = margin
     
     def set_goal(self, goal: np.ndarray):
@@ -25,7 +26,7 @@ class RobotPID:
         self.goal = goal.astype(float)
         self.update_error()
 
-    def look_at_goal(self):
+    def __look_at_goal(self):
         self.K[0] = 0
         self.K[1] = self.Kg[1]
         self.K[2] = 0
@@ -34,7 +35,7 @@ class RobotPID:
         if self.is_at_goal():
             self.state = ORIENT_TO_GOAL
 
-    def move_to_goal(self):
+    def __move_to_goal(self):
         self.K[0] = self.Kg[0]
         self.K[1] = self.Kg[1]
         self.K[2] = 0
@@ -43,12 +44,14 @@ class RobotPID:
         if self.is_at_goal():
             self.state = ORIENT_TO_GOAL
 
-    def orient_to_goal(self):
+    def __orient_to_goal(self):
         self.K[0] = 0
         self.K[1] = 0
         self.K[2] = self.Kg[2]
         if not self.is_at_goal(self.margin * self.distance_criteria):
             self.state = LOOK_AT_GOAL
+        if self.is_oriented_to_goal():
+            self.state = FINISHED
     
     def __clamp_angle(self, rad_angle=0, min_value=-np.pi, max_value=np.pi):
         if min_value > 0:
@@ -94,16 +97,18 @@ class RobotPID:
         return abs(self.error[2]) < criteria
     
     def is_finished(self):
-        return self.state == ORIENT_TO_GOAL and self.is_oriented_to_goal()
+        return self.state == FINISHED
     
     def solve_velocities(self):
+        if self.state == FINISHED:
+            return 0, 0
         self.update_error()
         if self.state == LOOK_AT_GOAL:
-            self.look_at_goal()
+            self.__look_at_goal()
         if self.state == MOVE_TO_GOAL:
-            self.move_to_goal()
+            self.__move_to_goal()
         if self.state == ORIENT_TO_GOAL:
-            self.orient_to_goal()
+            self.__orient_to_goal()
         v_k = self.K[0] * self.error[0]
         w_k = self.K[1] * self.error[1] + self.K[2] * self.error[2]
         return max(min(round(20 * v_k), 20), -20), max(min(round(5 * w_k), 5), -5)

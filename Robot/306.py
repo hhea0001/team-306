@@ -49,13 +49,14 @@ class Team306:
         self.image = np.zeros([480,640,3], dtype=np.uint8)
         self.marked_image = np.zeros([480,640,3], dtype=np.uint8)
     
-    def move_to(self, state):
+    def move_to(self, goal):
         self.robot.set_velocity([0, 0])
-        plan_found = self.rrt.plan(self.sim.get_position(), state)
-        if plan_found:
+        found_path = self.rrt.plan(self.sim.get_position(), goal)
+    
+    def __check_plan(self):
+        if self.pid.is_finished() and self.rrt.has_next_goal():
             next_goal = self.rrt.get_next_goal()
-            if next_goal is not None:
-                self.pid.set_goal(next_goal)
+            self.pid.set_goal(next_goal)
     
     def __try_get_new_image(self):
         image = self.robot.get_image()
@@ -70,16 +71,7 @@ class Team306:
         return True
     
     def __solve_velocity(self):
-        if not self.pid.is_finished():
-            linear_vel, angular_vel = self.pid.solve_velocities()
-        else:
-            next_goal = self.rrt.get_next_goal()
-            if next_goal is not None:
-                self.pid.set_goal(next_goal)
-                linear_vel, angular_vel = self.pid.solve_velocities()
-            else:
-                linear_vel, angular_vel = 0.0, 0.0
-        return linear_vel, angular_vel
+        return self.pid.solve_velocities()
     
     def __detect_aruco_markers(self) -> List[Landmark]:
         markers, self.marked_image = self.aruco_detector.detect_marker_positions(self.image)
@@ -94,6 +86,7 @@ class Team306:
         dt = current_time - self.previous_time
         self.previous_time = current_time
         # Update robot velocity
+        self.__check_plan()
         linear_vel, angular_vel = self.__solve_velocity()
         left_vel, right_vel = self.robot.set_velocity([linear_vel, angular_vel])
         # Predict in simulation
@@ -148,7 +141,7 @@ if __name__ == "__main__":
     )
 
     #team306.pid.set_goal(np.array([0.300, -0.415, 0.0]))
-    team306.move_to([1.2, 0.0, 0.0])
+    team306.move_to([1.2, 0, 3.14])
 
     # Create preview window
     window = Window()
