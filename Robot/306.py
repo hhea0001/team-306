@@ -7,6 +7,7 @@ from util.fruit import FRUIT_TYPES
 from util.landmark import Landmark
 from util.pibot import PenguinPi as Robot
 from util.pid import RobotPID
+from util.planning import Bounds, Node, Planner
 from util.sim import Simulation, SimRobot
 from util.window import Window
 from util.aruco import ArucoDetector
@@ -31,6 +32,15 @@ class Team306:
         self.pid = RobotPID(
             sim_robot = self.sim.robot
         )
+        # Setup RRT planner
+        self.rrt = Planner(
+            simulation = self.sim,
+            robot_radius = 0.2,
+            obstacle_radius = 0.1,
+            bounds = Bounds(
+                -1.3, 1.3, -1.3, 1.3
+            )
+        )
         # Setup aruco detector
         self.aruco_detector = ArucoDetector(camera_matrix)
         # Initialise time
@@ -38,6 +48,14 @@ class Team306:
         # Initialise image
         self.image = np.zeros([480,640,3], dtype=np.uint8)
         self.marked_image = np.zeros([480,640,3], dtype=np.uint8)
+    
+    def move_to(self, state):
+        self.robot.set_velocity([0, 0])
+        plan_found = self.rrt.plan(self.sim.get_position(), state)
+        if plan_found:
+            next_goal = self.rrt.get_next_goal()
+            if next_goal is not None:
+                self.pid.set_goal(next_goal)
     
     def __try_get_new_image(self):
         image = self.robot.get_image()
@@ -55,14 +73,19 @@ class Team306:
         if not self.pid.is_finished():
             linear_vel, angular_vel = self.pid.solve_velocities()
         else:
-            linear_vel, angular_vel = 0, 0
+            next_goal = self.rrt.get_next_goal()
+            if next_goal is not None:
+                self.pid.set_goal(next_goal)
+                linear_vel, angular_vel = self.pid.solve_velocities()
+            else:
+                linear_vel, angular_vel = 0.0, 0.0
         return linear_vel, angular_vel
     
-    def __detect_aruco_markers(self) -> Dict[str, Landmark]:
+    def __detect_aruco_markers(self) -> List[Landmark]:
         markers, self.marked_image = self.aruco_detector.detect_marker_positions(self.image)
         return markers
 
-    def __detect_fruits(self) -> Dict[str, Landmark]:
+    def __detect_fruits(self) -> List[Landmark]:
         return []
     
     def drive(self):
@@ -124,7 +147,8 @@ if __name__ == "__main__":
         baseline = baseline
     )
 
-    team306.pid.set_goal(np.array([0.5, 0, 0.0]))
+    #team306.pid.set_goal(np.array([0.300, -0.415, 0.0]))
+    team306.move_to([1.2, 0.0, 0.0])
 
     # Create preview window
     window = Window()

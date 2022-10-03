@@ -130,7 +130,7 @@ class SimRobot:
         return linear_velocity, angular_velocity
     
     def get_position(self):
-        return self.state[0:2,:]
+        return self.state[0:2,0]
     
     def get_angle(self):
         return self.state[2]
