@@ -9,8 +9,8 @@ class Simulation:
 
     def __init__(self, sim_robot, map_data):
         # State components
-        self.robot = sim_robot
-        self.markers, self.taglist = self.__parse_map_data(map_data)
+        self.robot: SimRobot = sim_robot
+        self.landmarks, self.taglist = self.__parse_map_data(map_data)
         # Covariance matrix
         self.P = np.zeros((self.__get_state_length(), self.__get_state_length()))
         self.init_lm_cov = 1e3
@@ -28,16 +28,16 @@ class Simulation:
         return len(self.robot.state) + 2 * self.__get_landmarks_length()
 
     def __get_landmarks_length(self):
-        return int(self.markers.shape[1])
+        return int(self.landmarks.shape[1])
 
     def __get_state_vector(self):
         state = np.concatenate(
-            (self.robot.state, np.reshape(self.markers, (-1,1), order='F')), axis=0)
+            (self.robot.state, np.reshape(self.landmarks, (-1,1), order='F')), axis=0)
         return state
     
     def __set_state_vector(self, state):
         self.robot.state = state[0:5,:]
-        self.markers = np.reshape(state[5:,:], (2,-1), order='F')
+        self.landmarks = np.reshape(state[5:,:], (2,-1), order='F')
 
     def __state_transition(self, dt):
         n = self.__get_state_length()
@@ -65,7 +65,7 @@ class Simulation:
             lm_bff = lm.position
             lm_inertial = robot_xy + R_theta @ lm_bff
             self.taglist[lm.tag] = len(self.taglist)
-            self.markers = np.concatenate((self.markers, lm_inertial), axis=1)
+            self.landmarks = np.concatenate((self.landmarks, lm_inertial), axis=1)
             # Create a simple, large covariance to be fixed by the update step
             self.P = np.concatenate((self.P, np.zeros((2, self.P.shape[1]))), axis=0)
             self.P = np.concatenate((self.P, np.zeros((self.P.shape[0], 2))), axis=1)
@@ -76,6 +76,12 @@ class Simulation:
     #     if self.number_landmarks() > 0:
     #         utils = MappingUtils(self.markers, self.P[5:,5:], self.taglist)
     #         utils.save(fname)
+
+    def get_position(self):
+        return self.robot.get_position()
+    
+    def get_angle(self):
+        return self.robot.get_angle()
         
     def predict(self, left_vel, right_vel, dt):
         self.robot.drive(left_vel, right_vel, dt)
@@ -96,9 +102,9 @@ class Simulation:
         for i in range(len(measurements)):
             R[2*i:2*i+2,2*i:2*i+2] = measurements[i].covariance
         # Compute own measurements
-        z_hat = self.robot.measure(self.markers, idx_list)
+        z_hat = self.robot.measure(self.landmarks, idx_list)
         z_hat = z_hat.reshape((-1,1),order="F")
-        C = self.robot.measure_dt(self.markers, idx_list)
+        C = self.robot.measure_derivative(self.landmarks, idx_list)
         x = self.__get_state_vector()
         temp = C @ self.P @ C.T + R
         K = self.P @ C.T @ np.linalg.inv(temp)
@@ -122,14 +128,20 @@ class SimRobot:
         linear_velocity = (left_speed_m + right_speed_m) / 2.0
         angular_velocity = (right_speed_m - left_speed_m) / self.wheels_width
         return linear_velocity, angular_velocity
+    
+    def get_position(self):
+        return self.state[0:2,:]
+    
+    def get_angle(self):
+        return self.state[2]
 
     def drive(self, left_vel, right_vel, dt):
         linear_velocity, angular_velocity = self.__convert_wheel_speeds(left_vel, right_vel)  
         # Remove float error where values are close to 0
-        if (abs(linear_velocity) < 0.001):
-            linear_velocity = 0
-        if (abs(angular_velocity) < 0.001):
-            angular_velocity = 0
+        # if (abs(linear_velocity) < 0.001):
+        #     linear_velocity = 0
+        # if (abs(angular_velocity) < 0.001):
+        #     angular_velocity = 0
         self.state[3] = linear_velocity
         self.state[4] = angular_velocity
         # Apply the velocities
@@ -211,7 +223,7 @@ class SimRobot:
         markers_bff = np.concatenate(measurements, axis=1)
         return markers_bff
     
-    def measure_dt(self, markers, idx_list):
+    def measure_derivative(self, markers, idx_list):
         # Compute the derivative of the markers in the order given by idx_list w.r.t. robot and markers
         robot_state_length = self.state.shape[0]
         n = 2*len(idx_list)
@@ -235,31 +247,4 @@ class SimRobot:
             DH[2*i:2*i+2, robot_state_length+2*j:robot_state_length+2*j+2] = Rot_theta.T
             # print(DH[i:i+2,:])
         return DH
-
-if __name__ == "__main__":
-    sim = Simulation(
-        map_data = {},
-        sim_robot = SimRobot(
-            wheels_width = 0.154, 
-            wheels_scale = 0.005
-        )
-    )
-
-    sim.markers = {
-        "0": np.array([0.33, 0.555]),
-        "2": np.array([2, 1])
-    }
-
-    sim.fruits = {
-        "apple1": np.array([-0.3412, 0.32113])
-    }
-
-    x = sim._Simulation__get_state_vector()
-    print(x)
-    x[4] = 2
-    x[10] = -3
-    sim._Simulation__set_state_vector(x)
-    x = sim._Simulation__get_state_vector()
-    print(x)
-    print(sim.fruits)
-    
+        

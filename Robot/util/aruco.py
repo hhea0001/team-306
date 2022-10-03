@@ -34,6 +34,7 @@ class ArucoDetector:
             lm_tvecs = tvecs[ids==idi].T
             lm_bff2d = np.block([[lm_tvecs[2,:]],[-lm_tvecs[0,:]]])
             lm_bff2d = np.mean(lm_bff2d, axis=1).reshape(-1,1)
+            lm_bff2d[0] += 0.15/2
             lm_measurement = Landmark(lm_bff2d, "aruco" + str(idi) + "_0")
             measurements.append(lm_measurement)
         # Draw markers on image copy

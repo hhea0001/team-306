@@ -6,6 +6,7 @@ import numpy as np
 from util.fruit import FRUIT_TYPES
 from util.landmark import Landmark
 from util.pibot import PenguinPi as Robot
+from util.pid import RobotPID
 from util.sim import Simulation, SimRobot
 from util.window import Window
 from util.aruco import ArucoDetector
@@ -26,6 +27,10 @@ class Team306:
                 wheels_scale = scale
             )
         )
+        # Setup PID controller
+        self.pid = RobotPID(
+            sim_robot = self.sim.robot
+        )
         # Setup aruco detector
         self.aruco_detector = ArucoDetector(camera_matrix)
         # Initialise time
@@ -33,12 +38,6 @@ class Team306:
         # Initialise image
         self.image = np.zeros([480,640,3], dtype=np.uint8)
         self.marked_image = np.zeros([480,640,3], dtype=np.uint8)
-
-    def __get_position(self):
-        return self.sim.state[0:2]
-    
-    def __get_angle(self):
-        return self.sim.state[2]
     
     def __try_get_new_image(self):
         image = self.robot.get_image()
@@ -53,8 +52,10 @@ class Team306:
         return True
     
     def __solve_velocity(self):
-        linear_vel = 0
-        angular_vel = 1
+        if not self.pid.is_finished():
+            linear_vel, angular_vel = self.pid.solve_velocities()
+        else:
+            linear_vel, angular_vel = 0, 0
         return linear_vel, angular_vel
     
     def __detect_aruco_markers(self) -> Dict[str, Landmark]:
@@ -122,6 +123,8 @@ if __name__ == "__main__":
         scale = scale, 
         baseline = baseline
     )
+
+    team306.pid.set_goal(np.array([0.5, 0, 0.0]))
 
     # Create preview window
     window = Window()

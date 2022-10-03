@@ -9,7 +9,7 @@ class PenguinPi:
         self.port = port
         self.wheel_vel = [0, 0]
 
-    def set_velocity(self, command, tick=20, turning_tick=5, time=0): 
+    def set_velocity(self, command, tick=1, turning_tick=1, time=0): 
         l_vel = command[0]*tick - command[1]*turning_tick
         r_vel = command[0]*tick + command[1]*turning_tick
         self.wheel_vel = [l_vel, r_vel]
