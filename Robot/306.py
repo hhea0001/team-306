@@ -2,6 +2,7 @@
 import json
 import math
 import random
+import sys
 import time
 from typing import Dict, List, Tuple
 import numpy as np
@@ -57,7 +58,7 @@ class Team306:
         # Initialise time
         self.previous_time = time.time()
         # Initialise image
-        self.image = np.zeros([480,640,3], dtype=np.uint8)
+        self.image = self.robot.get_image()
         self.marked_image = np.zeros([480,640,3], dtype=np.uint8)
     
     def __try_get_new_image(self):
@@ -125,9 +126,10 @@ class Team306:
         self.__create_new_plan()
     
     def plan(self):
-        # Check if robot is about to crash into an obstacle
+        # Check if robot is about to crash into an obstacle or will in the future
         # and if so create a new plan to the fruit
-        if self.sim.detect_imminent_collision():
+        #if self.sim.detect_imminent_collision() or self.rrt.is_possible_collision():
+        if self.rrt.is_possible_collision():
             self.__create_new_plan()
             return
         # If the robot has finished moving
@@ -177,7 +179,16 @@ if __name__ == "__main__":
     parser.add_argument("--map", type=str, default='')
     parser.add_argument("--search", type=str, default='')
     parser.add_argument("--fruit", action='store_true')
+    parser.add_argument("--stop", action='store_true')
     args = parser.parse_args()
+
+    if args.stop:
+        stop_robot = Robot(
+            args.ip,
+            args.port
+        )
+        stop_robot.set_velocity([0, 0])
+        sys.exit()
 
     # Load calibration parameters
     if args.ip == 'localhost':

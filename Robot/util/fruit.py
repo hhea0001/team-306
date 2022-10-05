@@ -17,13 +17,14 @@ FRUIT_SIZES = {
 }
 
 class FruitDetector:
-    def __init__(self, model_name, camera_matrix):
+    def __init__(self, model_name, camera_matrix, confidence = 0.5):
         if model_name == '':
             self.model = None
         else:
             self.model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_name)
         self.fov_x = 2 * np.arctan2(camera_matrix[0][2], camera_matrix[0][0])
         self.fov_y = 2 * np.arctan2(camera_matrix[1][2], camera_matrix[1][1])
+        self.confidence = confidence
     
     def detect_fruit_positions(self, image_array, marked_image):
         if self.model == None:
@@ -35,7 +36,7 @@ class FruitDetector:
         # Setup results array
         landmarks: List[Landmark] = []
         for i, label in enumerate(labels):
-            if (confidences[i] < 0.5):
+            if (confidences[i] < self.confidence):
                 continue
             xmin, ymin, xmax, ymax = coords[i][0].item(), coords[i][1].item(), coords[i][2].item(), coords[i][3].item()
             name = names[label.item()]
@@ -48,5 +49,5 @@ class FruitDetector:
             forward_distance = (FRUIT_SIZES[name][2]/2) / math.tan(angle_vertical/2)
             angle_horizontal = -self.fov_x * (x - 0.5)
             side_distance = forward_distance * math.tan(angle_horizontal)
-            landmarks.append(Landmark(np.array([forward_distance, side_distance]).reshape(-1,1), name, 1/confidence * np.eye(2)))
+            landmarks.append(Landmark(np.array([forward_distance, side_distance]).reshape(-1,1), name + "_0", 1/confidence * np.eye(2)))
         return landmarks, marked_image

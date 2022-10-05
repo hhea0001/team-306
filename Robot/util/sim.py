@@ -80,6 +80,27 @@ class Simulation:
     #             if not fruit_exists:
     #                 lm.tag = fruit_name + f"_{fruit_index}"
 
+    # def __find_fruit(self, measurements: List[Landmark]):
+    #     th = self.robot.state[2]
+    #     robot_xy = self.robot.state[0:2,:]
+    #     R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
+    #     for lm in measurements:
+    #         if "aruco" not in lm.tag:
+    #             fruit_name = lm.tag
+    #             fruit_pos = robot_xy + R_theta @ lm.position
+    #             for key in self.taglist:
+    #                 if fruit_name in key:
+    #                     index = self.taglist[key]
+    #                     dx = self.landmarks[0, index] - fruit_pos[0]
+    #                     dy = self.landmarks[1, index] - fruit_pos[1]
+    #                     dist = math.sqrt(dx * dx + dy * dy)
+    #                     if dist <= 0.5:
+    #                         lm.tag = key
+    #                         print(self.taglist)
+    #                     else:
+    #                         measurements.remove(lm)
+    #                     break
+
     def __find_fruit(self, measurements: List[Landmark]):
         th = self.robot.state[2]
         robot_xy = self.robot.state[0:2,:]
@@ -100,6 +121,27 @@ class Simulation:
                             measurements.remove(lm)
                         break
     
+    def __remove_outliers(self, measurements):
+        filtered_measurements = []
+        th = self.robot.state[2]
+        robot_xy = self.robot.state[0:2,:]
+        R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
+        for lm in measurements:
+            if lm.tag not in self.taglist:
+                filtered_measurements.append(lm)
+                continue
+            elif "aruco" in lm.tag:
+                filtered_measurements.append(lm)
+                continue
+            index = self.taglist[lm.tag]
+            fruit_pos = robot_xy + R_theta @ lm.position
+            dx = self.landmarks[0, index] - fruit_pos[0]
+            dy = self.landmarks[1, index] - fruit_pos[1]
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist <= 1:
+                filtered_measurements.append(lm)
+        return filtered_measurements
+
     def __add_landmarks(self, measurements):
         th = self.robot.state[2]
         robot_xy = self.robot.state[0:2,:]
@@ -166,10 +208,11 @@ class Simulation:
         self.P = A @ self.P @ A.T + Q
 
     def update(self, measurements):
-        self.__find_fruit(measurements)
+        #self.__find_fruit(measurements)
+        self.__add_landmarks(measurements)
+        measurements = self.__remove_outliers(measurements)
         if not measurements:
             return
-        self.__add_landmarks(measurements)
         # Construct measurement index list
         tags = [lm.tag for lm in measurements]
         idx_list = [self.taglist[tag] for tag in tags]
