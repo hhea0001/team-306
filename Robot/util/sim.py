@@ -1,5 +1,6 @@
 
 from collections import OrderedDict
+import math
 from typing import Dict, List, Tuple
 import numpy as np
 
@@ -53,6 +54,52 @@ class Simulation:
         Q[0:5,0:5] = self.robot.drive_covariance(dt) + E
         return Q
     
+    # def __find_fruit(self, measurements: List[Landmark]):
+    #     th = self.robot.state[2]
+    #     robot_xy = self.robot.state[0:2,:]
+    #     R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
+    #     for lm in measurements:
+    #         if "aruco" not in lm.tag:
+    #             fruit_name = lm.tag
+    #             fruit_pos = robot_xy + R_theta @ lm.position
+    #             if fruit_pos[0] < -1.3 or fruit_pos[0] > 1.3 or fruit_pos[1] < -1.3 or fruit_pos[1] > 1.3:
+    #                 continue
+    #             fruit_index = 0
+    #             fruit_exists = False
+    #             for key in self.taglist:
+    #                 if fruit_name in key:
+    #                     index = self.taglist[key]
+    #                     dx = self.landmarks[0, index] - fruit_pos[0]
+    #                     dy = self.landmarks[1, index] - fruit_pos[1]
+    #                     dist = math.sqrt(dx * dx + dy * dy)
+    #                     if dist <= 0.5:
+    #                         lm.tag = key
+    #                         fruit_exists = True
+    #                         break
+    #                     fruit_index += 1
+    #             if not fruit_exists:
+    #                 lm.tag = fruit_name + f"_{fruit_index}"
+
+    def __find_fruit(self, measurements: List[Landmark]):
+        th = self.robot.state[2]
+        robot_xy = self.robot.state[0:2,:]
+        R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
+        for lm in measurements:
+            if "aruco" not in lm.tag:
+                fruit_name = lm.tag
+                fruit_pos = robot_xy + R_theta @ lm.position
+                for key in self.taglist:
+                    if fruit_name in key:
+                        index = self.taglist[key]
+                        dx = self.landmarks[0, index] - fruit_pos[0]
+                        dy = self.landmarks[1, index] - fruit_pos[1]
+                        dist = math.sqrt(dx * dx + dy * dy)
+                        if dist <= 0.5:
+                            lm.tag = key
+                        else:
+                            measurements.remove(lm)
+                        break
+    
     def __add_landmarks(self, measurements):
         th = self.robot.state[2]
         robot_xy = self.robot.state[0:2,:]
@@ -76,6 +123,35 @@ class Simulation:
     #     if self.number_landmarks() > 0:
     #         utils = MappingUtils(self.markers, self.P[5:,5:], self.taglist)
     #         utils.save(fname)
+    def find_fruit_index(self, fruit_name):
+        # lowest_coveriance = 10000
+        # best_guess = -1
+        for key in self.taglist:
+            if fruit_name in key:
+                return self.taglist[key]
+                # cov = self.P[self.taglist[key], self.taglist[key]]
+                # if cov < lowest_coveriance:
+                #     lowest_coveriance = cov
+                #     best_guess = self.taglist[key]
+                # return self.taglist[key]
+        return -1
+
+    def detect_imminent_collision(self, dt = 0.5, radius = 0.2):
+        pos = self.get_position()
+        th = self.get_angle()
+        lin_vel = self.robot.state[3, 0] * dt
+        future_x = pos[0] + lin_vel * math.cos(th)
+        future_y = pos[1] + lin_vel * math.sin(th)
+        return self.check_collision(future_x, future_y, radius)
+
+    def check_collision(self, x, y, radius):
+        for i in range(self.landmarks.shape[1]):
+            dx = x - self.landmarks[0,i]
+            dy = y - self.landmarks[1,i]
+            dist = np.sqrt(dx * dx + dy * dy)
+            if dist <= radius:
+                return True # Collision
+        return False # Safe
 
     def get_position(self):
         return self.robot.get_position()
@@ -90,6 +166,7 @@ class Simulation:
         self.P = A @ self.P @ A.T + Q
 
     def update(self, measurements):
+        self.__find_fruit(measurements)
         if not measurements:
             return
         self.__add_landmarks(measurements)
@@ -133,7 +210,7 @@ class SimRobot:
         return self.state[0:2,0]
     
     def get_angle(self):
-        return self.state[2]
+        return self.state[2,0]
 
     def drive(self, left_vel, right_vel, dt):
         linear_velocity, angular_velocity = self.__convert_wheel_speeds(left_vel, right_vel)  

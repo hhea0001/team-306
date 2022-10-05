@@ -25,7 +25,7 @@ class Bounds:
         self.ymax = ymax
 
 class Planner:
-    def __init__(self, simulation: Simulation, bounds = Bounds(-1, 1, -1, 1), robot_radius = 0.1, obstacle_radius = 0.1, max_iter = 5000, expand_dis = 0.5, path_resolution = 0.5, goal_sample_rate=20):
+    def __init__(self, simulation: Simulation, bounds = Bounds(-1, 1, -1, 1), robot_radius = 0.1, obstacle_radius = 0.1, max_iter = 5000, expand_dis = 0.5, path_resolution = 0.5, goal_sample_rate=50):
         # Parameters
         self.simulation = simulation
         self.bounds = bounds
@@ -58,12 +58,13 @@ class Planner:
             theta = math.atan2(dy, dx)
         else:
             theta = self.angle
-        print(x, y, theta)
         return np.array([x, y, theta])
     
     def plan(self, start, goal):
-        self.start = Node(start[0], start[1])
-        self.goal = Node(goal[0], goal[1])
+        self.goal = self.ensure_safe_goal(goal, self.simulation.landmarks)
+        if self.goal == None:
+            return False
+        self.start = self.ensure_safe_start(start, self.simulation.landmarks)
         self.current_plan = []
         self.angle = goal[2]
         self.i = 0
@@ -79,10 +80,40 @@ class Planner:
                 final_node = self.steer(self.node_list[-1], self.goal, self.expand_dis)
                 if self.check_collision(final_node, self.simulation.landmarks, self.robot_radius, self.obstacle_radius):
                     self.current_plan = self.generate_final_course(len(self.node_list) - 1)
-                    print(i)
-                    print(self.current_plan)
+                    print(f"Plan found after {i} iterations.")
+                    for i in range(len(self.current_plan)):
+                        print(f"Point {i}: {self.current_plan[i][0]:.2f}, {self.current_plan[i][1]:.2f}")
                     return True
+        print(f"Could not find valid plan after {i} iterations...")
         return False
+    
+    def ensure_safe_start(self, start, obstacles):
+        x, y = start[0], start[1]
+        safe_dist = self.obstacle_radius + self.robot_radius
+        for i in range(obstacles.shape[1]):
+            dx = x - obstacles[0,i]
+            dy = y - obstacles[1,i]
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist <= safe_dist:
+                dist_back = safe_dist - dist + 0.1
+                angle = math.atan2(dy, dx)
+                x += dist_back * math.cos(angle)
+                y += dist_back * math.sin(angle)
+        return Node(x, y)
+    
+    def ensure_safe_goal(self, goal, obstacles):
+        x, y = goal[0], goal[1]
+        safe_dist = self.obstacle_radius + self.robot_radius
+        for i in range(obstacles.shape[1]):
+            dx = x - obstacles[0,i]
+            dy = y - obstacles[1,i]
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist <= safe_dist:
+                return None
+        goal_node = Node(x, y)
+        if not self.check_if_inside_bounds(goal_node):
+            return None
+        return goal_node
 
     def steer(self, from_node, to_node, extend_length=float("inf")):
         new_node = Node(from_node.x, from_node.y)
@@ -114,7 +145,8 @@ class Planner:
             node = node.parent
         path.append([node.x, node.y])
         path.reverse()
-        path.pop()
+        if self.calc_dist_to_goal(path[-2][0], path[-2][1]) < 0.01:
+            path.pop()
         return path
 
     def calc_dist_to_goal(self, x, y):
@@ -143,18 +175,6 @@ class Planner:
         dlist = [(node.x - rnd_node.x)**2 + (node.y - rnd_node.y)**2 for node in node_list]
         minind = dlist.index(min(dlist))
         return minind
-    
-    # @staticmethod
-    # def check_collision(node, obstacleList, robot_radius):
-    #     if node is None:
-    #         return False
-    #     for (ox, oy, size) in obstacleList:
-    #         dx_list = [ox - x for x in node.path_x]
-    #         dy_list = [oy - y for y in node.path_y]
-    #         d_list = [dx * dx + dy * dy for (dx, dy) in zip(dx_list, dy_list)]
-    #         if min(d_list) <= (size+robot_radius)**2:
-    #             return False  # collision
-    #     return True  # safe
     
     @staticmethod
     def check_collision(node, obstacles, robot_radius, obstacle_radius):
