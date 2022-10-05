@@ -17,12 +17,13 @@ from util.aruco import ArucoDetector
 import util.window as win
 
 class Team306:
-    def __init__(self, ip, port, map_data, search_list, camera_matrix, scale, baseline, fruit_model):
+    def __init__(self, ip, port, map_data, search_list, camera_matrix, scale, baseline, fruit_model, robot_radius, obstacle_radius, speed):
         # Setup robot
         self.robot = Robot(
             ip = ip, 
             port = port
         )
+        self.speed = speed
         # Setup simulated robot
         self.sim = Simulation(
             map_data = map_data,
@@ -40,8 +41,8 @@ class Team306:
         # Setup RRT planner
         self.rrt = Planner(
             simulation = self.sim,
-            robot_radius = 0.1,
-            obstacle_radius = 0.25,
+            robot_radius = robot_radius,
+            obstacle_radius = obstacle_radius,
             bounds = Bounds(
                 -1.3, 1.3, -1.3, 1.3
             )
@@ -105,7 +106,7 @@ class Team306:
             # Loop until a valid path has been found
             while not found_path:
                 # Set the goal to a random point in a circle around the fruit
-                radius = random.random() * 0.05 + (self.rrt.robot_radius + self.rrt.obstacle_radius)
+                radius = random.random() * 0.05 + 0.05 + (self.rrt.robot_radius + self.rrt.obstacle_radius)
                 angle = random.random() * math.pi*2
                 x = fruit_location[0] - radius * math.cos(angle)
                 y = fruit_location[1] - radius * math.sin(angle)
@@ -153,7 +154,7 @@ class Team306:
         self.previous_time = current_time
         # Update the real robot velocity
         linear_vel, angular_vel = self.__solve_velocity()
-        left_vel, right_vel = self.robot.set_velocity([linear_vel, angular_vel])
+        left_vel, right_vel = self.robot.set_velocity([linear_vel, angular_vel], self.speed, self.speed)
         # Predict the changes in simulation
         self.sim.predict(left_vel, right_vel, dt)
     
@@ -180,6 +181,9 @@ if __name__ == "__main__":
     parser.add_argument("--search", type=str, default='')
     parser.add_argument("--fruit", action='store_true')
     parser.add_argument("--stop", action='store_true')
+    parser.add_argument("--speed", type=int, default=2)
+    parser.add_argument("--obstacle_radius", type=float, default=0.20)
+    parser.add_argument("--robot_radius", type=float, default=0.1)
     args = parser.parse_args()
 
     if args.stop:
@@ -229,7 +233,10 @@ if __name__ == "__main__":
         camera_matrix = camera_matrix, 
         scale = scale, 
         baseline = baseline,
-        fruit_model = fruit_model
+        fruit_model = fruit_model,
+        speed = args.speed,
+        obstacle_radius = args.obstacle_radius,
+        robot_radius = args.robot_radius
     )
 
     # Create preview window

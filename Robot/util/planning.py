@@ -116,15 +116,18 @@ class Planner:
         return goal_node
 
     def is_possible_collision(self):
-        if len(self.current_plan) < 2:
+        if len(self.current_plan) < 2 or self.i - 1 > len(self.current_plan) - 2:
             return False
-        random_index = random.randint(0, len(self.current_plan) - 2)
+        random_index = random.randint(self.i - 1, len(self.current_plan) - 2)
         lerp = random.random()
-        pos_a = self.current_plan[random_index]
+        pos_a = self.current_plan[random_index] if random_index > self.i - 1 else self.simulation.get_position()
         pos_b = self.current_plan[random_index + 1]
         pos_x = lerp * pos_a[0] + (1 - lerp) * pos_b[0]
         pos_y = lerp * pos_a[1] + (1 - lerp) * pos_b[1]
-        return self.simulation.check_collision(pos_x, pos_y, 0.3)
+        e = self.simulation.check_collision(pos_x, pos_y, self.obstacle_radius)
+        if e:
+            print("E")
+        return e
 
     def steer(self, from_node, to_node, extend_length=float("inf")):
         new_node = Node(from_node.x, from_node.y)
