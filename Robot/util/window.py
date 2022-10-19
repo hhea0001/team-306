@@ -4,7 +4,7 @@ import numpy as np
 import pygame
 import pygame.display as display
 from util.planning import Planner
-from util.sim import Simulation
+from util.sim import SimRobot, Simulation
 
 TEXT_LEFT = 0
 TEXT_RIGHT = 1
@@ -28,6 +28,9 @@ class Window:
         background_file = dirname + '/images/background.png'
         self.background = pygame.image.load(background_file)
         self.draw_background()
+        robot_file = dirname + '/images/robot.png'
+        self.robot = pygame.image.load(robot_file)
+        self.robot = pygame.transform.smoothscale(self.robot, (30, 30))
     
     def __world_to_map(self, coord):
         return [-coord[0] * 258/1.5 + 538, coord[1] * 260/1.5 + 262]
@@ -66,8 +69,13 @@ class Window:
     def draw_background(self):
         self.canvas.blit(self.background, (0, 0))
     
-    def draw_map(self, robot, obstacles, plan):
-        pass
+    def draw_robot(self, robot: SimRobot):
+        robot_pic = pygame.transform.rotate(self.robot, robot.get_angle() * 180 / np.pi)
+        robot_pos = robot.get_position()
+        robot_pos = self.__world_to_map([robot_pos[0], robot_pos[1]])
+        robot_pos[0] -= robot_pic.get_width() / 2 
+        robot_pos[1] -= robot_pic.get_height() / 2
+        self.canvas.blit(robot_pic, robot_pos)
 
     def draw_landmarks(self, taglist, landmarks):
         for key in taglist:
@@ -108,6 +116,7 @@ class Window:
         self.draw_background()
         self.draw_camera(marked_image)
         self.draw_landmarks(simulation.taglist, simulation.landmarks)
+        self.draw_robot(simulation.robot)
         if len(plan.current_plan) > 0:
             self.draw_plan(plan.current_plan)
         pos = simulation.get_position()

@@ -21,7 +21,7 @@ class FruitDetector:
         if model_name == '':
             self.model = None
         else:
-            self.model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_name)
+            self.model = torch.hub.load('./yolov5', 'custom', path=model_name, source='local')
         self.fov_x = 2 * np.arctan2(camera_matrix[0][2], camera_matrix[0][0])
         self.fov_y = 2 * np.arctan2(camera_matrix[1][2], camera_matrix[1][1])
         self.confidence = confidence

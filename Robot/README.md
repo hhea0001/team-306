@@ -1,3 +1,10 @@
+# YOLOv5 installation
+git clone https://github.com/ultralytics/yolov5  # clone
+cd yolov5
+pip install -r requirements.txt  # install
+
+
+# Robot Setup
 pip install -r requirements.txt
 source ~/LiveDemo/catkin_ws/devel/setup.bash // or whatever
 roslaunch penguinpi_gazebo ECE4078.launch
