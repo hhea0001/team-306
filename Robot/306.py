@@ -19,7 +19,7 @@ from util.aruco import ArucoDetector
 import util.window as win
 
 class Team306:
-    def __init__(self, ip, port, map_data, search_list, camera_matrix, scale, baseline, fruit_model, robot_radius, obstacle_radius, speed):
+    def __init__(self, ip, port, map_data, search_list, camera_matrix, scale, baseline, fruit_model, obstacle_radius, speed, confidence):
         # Setup robot
         self.robot = Robot(
             ip = ip, 
@@ -34,7 +34,8 @@ class Team306:
                 wheels_width = baseline, 
                 wheels_scale = scale
             ),
-            target_list = search_list
+            target_list = search_list,
+            obstacle_radius = obstacle_radius
         )
         # Setup PID controller
         self.pid = RobotPID(
@@ -59,7 +60,11 @@ class Team306:
         # Setup aruco detector
         self.aruco_detector = ArucoDetector(camera_matrix)
         # Setup fruit detector
-        self.fruit_detector = FruitDetector(fruit_model, camera_matrix)
+        self.fruit_detector = FruitDetector(
+            model_name = fruit_model, 
+            camera_matrix = camera_matrix, 
+            confidence = confidence
+        )
         # Initialise time
         self.previous_time = time.time()
         # Initialise image
@@ -172,17 +177,22 @@ class Team306:
         export_type = "sim" if self.robot.ip == 'localhost' else "robot"
         slam_filename_format = f"slam_{export_type}_{{0}}_306.txt"
         targets_filename_format = f"targets_{export_type}_{{0}}_306.txt"
+        raw_filename_format = f"r_{export_type[0]}_{{0}}.txt"
         it = 1
         while os.path.exists(slam_filename_format.format(it)):
             it += 1
         slam_filename = slam_filename_format.format(it)
         targets_filename = targets_filename_format.format(it)
+        raw_filename = raw_filename_format.format(it)
         with open(slam_filename, 'w') as f:
             json.dump(self.sim.get_slam_output(), f)
             print(f"Saved slam as {slam_filename}")
         with open(targets_filename, 'w') as f:
             json.dump(self.sim.get_targets_output(), f)
             print(f"Saved targets as {targets_filename}")
+        with open(raw_filename, 'w') as f:
+            json.dump(self.sim.get_save_data(), f)
+            print(f"Saved targets as {raw_filename}")
     
     def handle_input(self):
         # Quit event
@@ -260,11 +270,10 @@ if __name__ == "__main__":
     parser.add_argument("--param_dir", type=str, default="param/")
     parser.add_argument("--map", type=str, default='')
     parser.add_argument("--search", type=str, default='')
-    parser.add_argument("--fruit", action='store_true')
     parser.add_argument("--stop", action='store_true')
     parser.add_argument("--speed", type=int, default=2)
-    parser.add_argument("--obstacle_radius", type=float, default=0.20)
-    parser.add_argument("--robot_radius", type=float, default=0.1)
+    parser.add_argument("--radius", type=float, default=0.20)
+    parser.add_argument("--confidence", type=float, default=0.75)
     args = parser.parse_args()
 
     if args.stop:
@@ -299,11 +308,7 @@ if __name__ == "__main__":
             search_list = f.read().split("\n")
             search_list = [x for x in search_list if x]
     
-    if args.fruit:
-        fruit_model = args.param_dir + ("net_sim.pt" if args.ip == 'localhost' else "net.pt")
-    else:
-        fruit_model = ''
-
+    fruit_model = args.param_dir + ("net_sim.pt" if args.ip == 'localhost' else "net.pt")
 
     # Setup robot & robot simulation
     team306 = Team306(
@@ -316,8 +321,8 @@ if __name__ == "__main__":
         baseline = baseline,
         fruit_model = fruit_model,
         speed = args.speed,
-        obstacle_radius = args.obstacle_radius,
-        robot_radius = args.robot_radius
+        obstacle_radius = args.radius,
+        confidence = args.confidence
     )
 
     # Create preview window

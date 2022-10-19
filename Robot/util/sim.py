@@ -12,20 +12,29 @@ class Simulation:
         # State components
         self.robot: SimRobot = sim_robot
         self.obstacle_radius = obstacle_radius
-        self.landmarks, self.taglist = self.__parse_map_data(map_data)
+        self.landmarks = np.zeros((2, 0))
+        self.taglist = {}
         self.target_list = target_list
         # Covariance matrix
         self.P = np.zeros((self.__get_state_length(), self.__get_state_length()))
         self.init_lm_cov = 1e3
+        self.__parse_map_data(map_data)
     
     def __parse_map_data(self, map_data):
-        taglist = {}
-        landmarks = np.zeros((2, 0))
-        for key in map_data:
-            taglist[key] = len(taglist)
-            position = np.reshape(np.array([map_data[key]["x"],map_data[key]["y"]]),(-1,1), order='F')
-            landmarks = np.concatenate((landmarks, position), axis=1)
-        return landmarks, taglist
+        try:
+            taglist = {}
+            landmarks = np.zeros((2, 0))
+            for key in map_data:
+                taglist[key] = len(taglist)
+                position = np.reshape(np.array([map_data[key]["x"],map_data[key]["y"]]),(-1,1), order='F')
+                landmarks = np.concatenate((landmarks, position), axis=1)
+            self.taglist = taglist
+            self.landmarks = landmarks
+            self.P = np.zeros((self.__get_state_length(), self.__get_state_length()))
+        except:
+            self.taglist = map_data["taglist"]
+            self.landmarks = np.array(map_data["landmarks"])
+            self.P = np.array(map_data["covariance"])
 
     def __get_state_length(self):
         return len(self.robot.state) + 2 * self.__get_landmarks_length()
@@ -214,6 +223,14 @@ class Simulation:
                 "x": self.landmarks[0, index]
             }
         return targets
+    
+    def get_save_data(self):
+        json_data = {
+            "taglist": self.taglist,
+            "landmarks": self.landmarks.tolist(),
+            "covariance": self.P.tolist()
+        }
+        return json_data
 
 class SimRobot:
     def __init__(self, wheels_width, wheels_scale):
