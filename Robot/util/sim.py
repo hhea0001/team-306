@@ -8,10 +8,12 @@ from util.landmark import Landmark
 
 class Simulation:
 
-    def __init__(self, sim_robot, map_data, obstacle_radius = 0.2, target_list = []):
+    def __init__(self, sim_robot, map_data, obstacle_radius = 0.2, target_list = [], max_fruit_dist = 0.4, max_target_dist = 1):
         # State components
         self.robot: SimRobot = sim_robot
         self.obstacle_radius = obstacle_radius
+        self.max_fruit_dist = max_fruit_dist
+        self.max_target_dist = max_target_dist
         self.landmarks = np.zeros((2, 0))
         self.taglist = {}
         self.target_list = target_list
@@ -105,9 +107,11 @@ class Simulation:
             
             is_target_fruit = any(target_fruit in lm.tag for target_fruit in self.target_list)
 
-            if is_target_fruit:
+            if is_target_fruit and dist <= self.max_target_dist:
                 lm.tag = matching_fruit
-            elif dist <= 0.4 or num_of_matching_fruit >= 2:
+            elif is_target_fruit:
+                continue
+            elif dist <= self.max_fruit_dist or num_of_matching_fruit >= 2:
                 lm.tag = matching_fruit
             else:
                 lm.tag += f"_{num_of_matching_fruit}"

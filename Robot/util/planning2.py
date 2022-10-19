@@ -149,11 +149,10 @@ class Planner:
         while node.parent is not None:
             previous_node = node
             node = node.parent
-            _, theta = self.calc_distance_and_angle(node, previous_node)
-            path.append([node.x, node.y, theta])
+            dist, theta = self.calc_distance_and_angle(node, previous_node)
+            if dist > 0.01:
+                path.append([node.x, node.y, theta])
         path.reverse()
-        # if self.calc_dist_to_goal(path[-2][0], path[-2][1]) < 0.01:
-        #     path.pop()
         return Plan(self.simulation, path)
 
     def is_valid_goal(self, goal):

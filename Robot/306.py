@@ -19,7 +19,7 @@ from util.aruco import ArucoDetector
 import util.window as win
 
 class Team306:
-    def __init__(self, ip, port, map_data, search_list, camera_matrix, scale, baseline, fruit_model, obstacle_radius, speed, confidence):
+    def __init__(self, ip, port, map_data, search_list, camera_matrix, scale, baseline, fruit_model, obstacle_radius, speed, confidence, max_dist, max_target_dist):
         # Setup robot
         self.robot = Robot(
             ip = ip, 
@@ -35,7 +35,9 @@ class Team306:
                 wheels_scale = scale
             ),
             target_list = search_list,
-            obstacle_radius = obstacle_radius
+            obstacle_radius = obstacle_radius,
+            max_fruit_dist = max_dist,
+            max_target_dist = max_target_dist
         )
         # Setup PID controller
         self.pid = RobotPID(
@@ -120,8 +122,8 @@ class Team306:
         if self.search_fruit_index == -1:
             while self.current_plan == None:
                 # Set the goal to a random point in the arena
-                x = random.random() * 2.6 - 1.3
-                y = random.random() * 2.6 - 1.3
+                x = random.random() * (self.rrt.bounds.xmax - self.rrt.bounds.xmin) + self.rrt.bounds.xmin
+                y = random.random() * (self.rrt.bounds.ymax - self.rrt.bounds.ymin) + self.rrt.bounds.ymin
                 angle = random.random() * math.pi * 2
                 # Try making a plan with this estimated goal
                 current_pos, current_angle = self.sim.get_position(), self.sim.get_angle()
@@ -274,6 +276,8 @@ if __name__ == "__main__":
     parser.add_argument("--speed", type=int, default=2)
     parser.add_argument("--radius", type=float, default=0.20)
     parser.add_argument("--confidence", type=float, default=0.75)
+    parser.add_argument("--max_dist", type=float, default=0.4)
+    parser.add_argument("--max_target_dist", type=float, default=1)
     args = parser.parse_args()
 
     if args.stop:
@@ -322,7 +326,9 @@ if __name__ == "__main__":
         fruit_model = fruit_model,
         speed = args.speed,
         obstacle_radius = args.radius,
-        confidence = args.confidence
+        confidence = args.confidence,
+        max_dist = args.max_dist,
+        max_target_dist = args.max_target_dist
     )
 
     # Create preview window
