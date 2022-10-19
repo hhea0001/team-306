@@ -64,7 +64,7 @@ class Plan:
             return False
 
 class Planner:
-    def __init__(self, simulation: Simulation, bounds = Bounds(-1, 1, -1, 1), max_iter = 100, expand_dis = 0.5, path_resolution = 0.2):
+    def __init__(self, simulation: Simulation, bounds = Bounds(-1, 1, -1, 1), max_iter = 100, expand_dis = 0.5, path_resolution = 0.1):
         # Parameters
         self.simulation = simulation
         self.bounds = bounds
