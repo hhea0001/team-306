@@ -32,9 +32,9 @@ class RobotPID:
         self.K[0] = 0
         self.K[1] = self.Kg[1]
         self.K[2] = 0
-        if self.is_looking_at_goal():
+        if self.looking_at_goal():
             self.state = MOVE_TO_GOAL
-        if self.is_at_goal():
+        if self.at_goal():
             self.state = ORIENT_TO_GOAL
 
     def __move_to_goal(self):
@@ -43,16 +43,16 @@ class RobotPID:
         self.K[2] = 0
         # if not self.is_looking_at_goal(self.margin * self.angle_criteria):
         #     self.state = LOOK_AT_GOAL
-        if self.is_at_goal():
+        if self.at_goal():
             self.state = ORIENT_TO_GOAL
 
     def __orient_to_goal(self):
         self.K[0] = 0
         self.K[1] = 0
         self.K[2] = self.Kg[2]
-        if not self.is_at_goal(self.margin * self.distance_criteria):
+        if not self.at_goal(self.margin * self.distance_criteria):
             self.state = LOOK_AT_GOAL
-        if self.is_oriented_to_goal():
+        if self.oriented_to_goal():
             self.state = FINISHED
 
     def __clamp_angle2(self, rad_angle=0, min_value=-np.pi/2, max_value=np.pi/2):
@@ -92,22 +92,22 @@ class RobotPID:
         orient_angle = self.goal[2] - self.robot.get_angle()
         self.error[2] = self.__clamp_angle(orient_angle) #if self.must_face else self.__clamp_angle2(orient_angle)
 
-    def is_looking_at_goal(self, criteria = 0):
+    def looking_at_goal(self, criteria = 0):
         if criteria == 0:
             criteria = self.angle_criteria
         return abs(self.error[1]) < criteria
 
-    def is_at_goal(self, criteria = 0):
+    def at_goal(self, criteria = 0):
         if criteria == 0:
             criteria = self.distance_criteria
         return self.__get_distance_to_goal() < criteria
     
-    def is_oriented_to_goal(self, criteria = 0):
+    def oriented_to_goal(self, criteria = 0):
         if criteria == 0:
             criteria = self.angle_criteria
         return abs(self.error[2]) < criteria
     
-    def is_finished(self):
+    def has_finished(self):
         return self.state == FINISHED
     
     def solve_velocities(self):

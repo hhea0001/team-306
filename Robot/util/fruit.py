@@ -17,7 +17,7 @@ FRUIT_SIZES = {
 }
 
 class FruitDetector:
-    def __init__(self, model_name, camera_matrix, confidence = 0.5):
+    def __init__(self, model_name, camera_matrix, confidence = 0.75):
         if model_name == '':
             self.model = None
         else:
@@ -49,5 +49,5 @@ class FruitDetector:
             forward_distance = (FRUIT_SIZES[name][2]/2) / math.tan(angle_vertical/2)
             angle_horizontal = -self.fov_x * (x - 0.5)
             side_distance = forward_distance * math.tan(angle_horizontal)
-            landmarks.append(Landmark(np.array([forward_distance, side_distance]).reshape(-1,1), name + "_0", 1/confidence * np.eye(2)))
+            landmarks.append(Landmark(np.array([forward_distance, side_distance]).reshape(-1,1), name, 1/confidence * np.eye(2)))
         return landmarks, marked_image

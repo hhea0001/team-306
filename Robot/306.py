@@ -1,16 +1,18 @@
 
 import json
 import math
+import os
 import random
 import sys
 import time
 from typing import Dict, List, Tuple
 import numpy as np
+import pygame
 from util.fruit import FRUIT_TYPES, FruitDetector
 from util.landmark import Landmark
 from util.pibot import PenguinPi as Robot
 from util.pid import RobotPID
-from util.planning import Bounds, Node, Planner
+from util.planning2 import Bounds, Planner, Plan
 from util.sim import Simulation, SimRobot
 from util.window import Window
 from util.aruco import ArucoDetector
@@ -24,13 +26,15 @@ class Team306:
             port = port
         )
         self.speed = speed
+        self.left_vel, self.right_vel = 0, 0
         # Setup simulated robot
         self.sim = Simulation(
             map_data = map_data,
             sim_robot = SimRobot(
                 wheels_width = baseline, 
                 wheels_scale = scale
-            )
+            ),
+            target_list = search_list
         )
         # Setup PID controller
         self.pid = RobotPID(
@@ -41,12 +45,12 @@ class Team306:
         # Setup RRT planner
         self.rrt = Planner(
             simulation = self.sim,
-            robot_radius = robot_radius,
-            obstacle_radius = obstacle_radius,
             bounds = Bounds(
-                -1.3, 1.3, -1.3, 1.3
+                -1.2, 1.2, -1.2, 1.2
             )
         )
+        self.current_plan: Plan = None
+        self.start_time = time.time()
         # Setup searching
         self.search_list = search_list
         self.search_index = -1
@@ -61,6 +65,10 @@ class Team306:
         # Initialise image
         self.image = self.robot.get_image()
         self.marked_image = np.zeros([480,640,3], dtype=np.uint8)
+        # Quit
+        self.quit = False
+        self.manual_driving = True
+        self.wasd = [False, False, False, False]
     
     def __try_get_new_image(self):
         image = self.robot.get_image()
@@ -75,7 +83,19 @@ class Team306:
         return True
     
     def __solve_velocity(self):
-        return self.pid.solve_velocities()
+        if not self.manual_driving:
+            return self.pid.solve_velocities()
+        else:
+            linear_vel = 0
+            angular_vel = 0
+            linear_vel += 20 if self.wasd[0] else 0
+            angular_vel += 5 if self.wasd[1] else 0
+            linear_vel -= 20 if self.wasd[2] else 0
+            angular_vel -= 5 if self.wasd[3] else 0
+            return linear_vel, angular_vel
+
+    def __set_velocity(self, linear_vel, angular_vel):
+        self.left_vel, self.right_vel = self.robot.set_velocity([linear_vel, angular_vel], self.speed, self.speed)
     
     def __detect_aruco_markers(self) -> List[Landmark]:
         markers, self.marked_image = self.aruco_detector.detect_marker_positions(self.image)
@@ -87,38 +107,48 @@ class Team306:
     
     def __create_new_plan(self):
         # This may take a while, so make sure the robot has stopped
-        self.robot.set_velocity([0, 0])
-        found_path = False
+        self.__set_velocity(0, 0)
+        self.current_plan = None
         # Find the fruit in the simulation
         self.search_fruit_index = self.sim.find_fruit_index(self.search_fruit_name)
         # If it doesn't exist, move around randomly
         if self.search_fruit_index == -1:
-            while not found_path:
+            while self.current_plan == None:
                 # Set the goal to a random point in the arena
                 x = random.random() * 2.6 - 1.3
                 y = random.random() * 2.6 - 1.3
                 angle = random.random() * math.pi * 2
                 # Try making a plan with this estimated goal
-                found_path = self.rrt.plan(self.sim.get_position(), [x, y, angle])
+                current_pos, current_angle = self.sim.get_position(), self.sim.get_angle()
+                self.current_plan = self.rrt.create_good_plan([current_pos[0], current_pos[1], current_angle], [x, y, angle])
         # If it does exist, attempt to move to the fruit
         else:
             fruit_location = self.sim.landmarks[:,self.search_fruit_index]
             # Loop until a valid path has been found
-            while not found_path:
-                # Set the goal to a random point in a circle around the fruit
-                radius = random.random() * 0.05 + 0.05 + (self.rrt.robot_radius + self.rrt.obstacle_radius)
-                angle = random.random() * math.pi*2
-                x = fruit_location[0] - radius * math.cos(angle)
-                y = fruit_location[1] - radius * math.sin(angle)
-                # Try making a plan with this estimated goal
-                found_path = self.rrt.plan(self.sim.get_position(), [x, y, angle])
+            while self.current_plan == None:
+                min_dist = 10000
+                for i in range(10):
+                    # Set the goal to a random point in a circle around the fruit
+                    radius = random.random() * 0.1 + (self.sim.obstacle_radius)
+                    angle = random.random() * math.pi*2
+                    x = fruit_location[0] - radius * math.cos(angle)
+                    y = fruit_location[1] - radius * math.sin(angle)
+                    # Try making a plan with this estimated goal
+                    current_pos, current_angle = self.sim.get_position(), self.sim.get_angle()
+                    new_plan = self.rrt.create_good_plan([current_pos[0], current_pos[1], current_angle], [x, y, angle])
+                    if new_plan != None:
+                        new_plan_length = new_plan.length()
+                        if new_plan_length < min_dist:
+                            min_dist = new_plan_length
+                            self.current_plan = new_plan
         # Update the PID
-        self.pid.set_goal(self.rrt.get_next_goal())
+        self.pid.set_goal(self.current_plan.get_next_goal())
     
     def __goto_next_fruit(self):
         # If this is the last fruit, then just exit function
         if self.search_index + 1 >= len(self.search_list):
             return
+        time.sleep(3)
         # Otherwise if found the previous fruit, increment current fruit index
         if self.search_fruit_index != -1:
             self.search_index += 1
@@ -126,37 +156,88 @@ class Team306:
         # Create a plan to get there
         self.__create_new_plan()
     
-    def plan(self):
-        # Check if robot is about to crash into an obstacle or will in the future
-        # and if so create a new plan to the fruit
-        #if self.sim.detect_imminent_collision() or self.rrt.is_possible_collision():
-        if self.rrt.is_possible_collision():
-            self.__create_new_plan()
-            return
-        # If the robot has finished moving
-        if self.pid.is_finished():
-            # And there is another step in the plan towards a fruit
-            if self.rrt.has_next_goal():
-                # Go to the next position
-                next_goal = self.rrt.get_next_goal()
-                self.pid.set_goal(next_goal)
-            # If we have arrived at the fruit
-            else:
-                # Wait 2 seconds, then move onto the next fruit
-                if self.search_index != -1:
-                    time.sleep(2)
-                self.__goto_next_fruit()
+    def __at_fruit(self):
+        current_pos = self.sim.get_position()
+        fruit_pos = self.sim.landmarks[:,self.search_fruit_index]
+        x = current_pos[0] - fruit_pos[0]
+        y = current_pos[1] - fruit_pos[1]
+        dist = np.sqrt(x*x + y*y)
+        if dist >= 0.45:
+            return False
+        else:
+            return True
         
+    def __save(self):
+        print("Saving...")
+        export_type = "sim" if self.robot.ip == 'localhost' else "robot"
+        slam_filename_format = f"slam_{export_type}_{{0}}_306.txt"
+        targets_filename_format = f"targets_{export_type}_{{0}}_306.txt"
+        it = 1
+        while os.path.exists(slam_filename_format.format(it)):
+            it += 1
+        slam_filename = slam_filename_format.format(it)
+        targets_filename = targets_filename_format.format(it)
+        with open(slam_filename, 'w') as f:
+            json.dump(self.sim.get_slam_output(), f)
+            print(f"Saved slam as {slam_filename}")
+        with open(targets_filename, 'w') as f:
+            json.dump(self.sim.get_targets_output(), f)
+            print(f"Saved targets as {targets_filename}")
+    
+    def handle_input(self):
+        # Quit event
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.quit = True
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_s:
+                self.__save()
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                self.manual_driving = not self.manual_driving
+            elif event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
+                down = event.type == pygame.KEYDOWN
+                if event.key == pygame.K_UP:
+                    self.wasd[0] = down
+                elif event.key == pygame.K_DOWN:
+                    self.wasd[2] = down
+                elif event.key == pygame.K_LEFT:
+                    self.wasd[1] = down
+                elif event.key == pygame.K_RIGHT:
+                    self.wasd[3] = down
+    
+    def plan(self):
+        if time.time() < self.start_time + 10:
+            return
+
+        if self.manual_driving:
+            return
+
+        if self.current_plan != None:
+            if self.current_plan.has_possible_collision():
+                self.__create_new_plan()
+                return
+            if self.pid.has_finished():
+                if self.current_plan.has_next_goal():
+                    next_goal = self.current_plan.get_next_goal()
+                    self.pid.set_goal(next_goal)
+                elif self.__at_fruit():
+                    self.__goto_next_fruit()
+                else:
+                    self.__create_new_plan()
+        else:
+            self.__goto_next_fruit()
+
     def drive(self):
         # Update the time parameters
         current_time = time.time()
         dt = current_time - self.previous_time
         self.previous_time = current_time
+        self.sim.predict(self.left_vel, self.right_vel, dt)
+
         # Update the real robot velocity
         linear_vel, angular_vel = self.__solve_velocity()
-        left_vel, right_vel = self.robot.set_velocity([linear_vel, angular_vel], self.speed, self.speed)
+        self.__set_velocity(linear_vel, angular_vel)
         # Predict the changes in simulation
-        self.sim.predict(left_vel, right_vel, dt)
+        
     
     def view(self):
         # If we have recieved a new image
@@ -244,14 +325,14 @@ if __name__ == "__main__":
 
     # Run operation loop
     while True:
+        team306.handle_input()
         team306.plan()
         team306.drive()
         team306.view()
-
-        #window.draw_image(team306.marked_image)
         
-        window.draw(team306.sim, team306.marked_image, team306.rrt)
+        window.draw(team306.sim, team306.marked_image, team306.current_plan)
         window.update()
 
-        if window.quit:
+        if team306.quit:
+            window.quit()
             break

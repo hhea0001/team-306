@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pygame
 import pygame.display as display
-from util.planning import Planner
+from util.planning2 import Plan
 from util.sim import SimRobot, Simulation
 
 TEXT_LEFT = 0
@@ -12,7 +12,6 @@ TEXT_CENTRE = 2
 
 class Window:
     def __init__(self):
-        self.quit = False
         # Setup canvas
         self.width, self.height = 800, 524
         self.canvas = display.set_mode((self.width, self.height))
@@ -43,12 +42,10 @@ class Window:
         width, height = display.get_window_size()
         if width != self.width or height != self.height:
             self.canvas = display.set_mode((self.width, self.height))
-        # Quit event
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                display.quit()
-                pygame.quit()
-                self.quit = True
+    
+    def quit(self):
+        display.quit()
+        pygame.quit()
     
     def draw_text(self, string, location, colour = (255,255,255), centre: TEXT_LEFT | TEXT_RIGHT | TEXT_CENTRE = TEXT_LEFT):
         text = self.font.render(string, True, colour)
@@ -112,13 +109,13 @@ class Window:
         view = pygame.transform.flip(view, True, False)
         self.canvas.blit(view, (4,316))
 
-    def draw(self, simulation: Simulation, marked_image: np.ndarray, plan: Planner):
+    def draw(self, simulation: Simulation, marked_image: np.ndarray, plan: Plan):
         self.draw_background()
         self.draw_camera(marked_image)
         self.draw_landmarks(simulation.taglist, simulation.landmarks)
         self.draw_robot(simulation.robot)
-        if len(plan.current_plan) > 0:
-            self.draw_plan(plan.current_plan)
+        if plan != None and len(plan.path) > 0:
+            self.draw_plan(plan.path)
         pos = simulation.get_position()
         angle = simulation.get_angle()
         # Draw current state

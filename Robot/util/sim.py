@@ -8,10 +8,12 @@ from util.landmark import Landmark
 
 class Simulation:
 
-    def __init__(self, sim_robot, map_data):
+    def __init__(self, sim_robot, map_data, obstacle_radius = 0.2, target_list = []):
         # State components
         self.robot: SimRobot = sim_robot
+        self.obstacle_radius = obstacle_radius
         self.landmarks, self.taglist = self.__parse_map_data(map_data)
+        self.target_list = target_list
         # Covariance matrix
         self.P = np.zeros((self.__get_state_length(), self.__get_state_length()))
         self.init_lm_cov = 1e3
@@ -53,73 +55,20 @@ class Simulation:
         E[3:5,3:5] = 0
         Q[0:5,0:5] = self.robot.drive_covariance(dt) + E
         return Q
-    
-    # def __find_fruit(self, measurements: List[Landmark]):
-    #     th = self.robot.state[2]
-    #     robot_xy = self.robot.state[0:2,:]
-    #     R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
-    #     for lm in measurements:
-    #         if "aruco" not in lm.tag:
-    #             fruit_name = lm.tag
-    #             fruit_pos = robot_xy + R_theta @ lm.position
-    #             if fruit_pos[0] < -1.3 or fruit_pos[0] > 1.3 or fruit_pos[1] < -1.3 or fruit_pos[1] > 1.3:
-    #                 continue
-    #             fruit_index = 0
-    #             fruit_exists = False
-    #             for key in self.taglist:
-    #                 if fruit_name in key:
-    #                     index = self.taglist[key]
-    #                     dx = self.landmarks[0, index] - fruit_pos[0]
-    #                     dy = self.landmarks[1, index] - fruit_pos[1]
-    #                     dist = math.sqrt(dx * dx + dy * dy)
-    #                     if dist <= 0.5:
-    #                         lm.tag = key
-    #                         fruit_exists = True
-    #                         break
-    #                     fruit_index += 1
-    #             if not fruit_exists:
-    #                 lm.tag = fruit_name + f"_{fruit_index}"
 
-    # def __find_fruit(self, measurements: List[Landmark]):
-    #     th = self.robot.state[2]
-    #     robot_xy = self.robot.state[0:2,:]
-    #     R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
-    #     for lm in measurements:
-    #         if "aruco" not in lm.tag:
-    #             fruit_name = lm.tag
-    #             fruit_pos = robot_xy + R_theta @ lm.position
-    #             for key in self.taglist:
-    #                 if fruit_name in key:
-    #                     index = self.taglist[key]
-    #                     dx = self.landmarks[0, index] - fruit_pos[0]
-    #                     dy = self.landmarks[1, index] - fruit_pos[1]
-    #                     dist = math.sqrt(dx * dx + dy * dy)
-    #                     if dist <= 0.5:
-    #                         lm.tag = key
-    #                         print(self.taglist)
-    #                     else:
-    #                         measurements.remove(lm)
-    #                     break
-
-    def __find_fruit(self, measurements: List[Landmark]):
-        th = self.robot.state[2]
-        robot_xy = self.robot.state[0:2,:]
-        R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
-        for lm in measurements:
-            if "aruco" not in lm.tag:
-                fruit_name = lm.tag
-                fruit_pos = robot_xy + R_theta @ lm.position
-                for key in self.taglist:
-                    if fruit_name in key:
-                        index = self.taglist[key]
-                        dx = self.landmarks[0, index] - fruit_pos[0]
-                        dy = self.landmarks[1, index] - fruit_pos[1]
-                        dist = math.sqrt(dx * dx + dy * dy)
-                        if dist <= 0.5:
-                            lm.tag = key
-                        else:
-                            measurements.remove(lm)
-                        break
+    def __find_fruit(self, type, position):
+        min_dist = 10000
+        matching_fruits = [tag for tag in self.taglist if type in tag]
+        matching_fruit = None
+        for fruit in matching_fruits:
+            index = self.taglist[fruit]
+            dx = self.landmarks[0, index] - position[0]
+            dy = self.landmarks[1, index] - position[1]
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist < min_dist:
+                matching_fruit = fruit
+                min_dist = dist
+        return matching_fruit, min_dist, len(matching_fruits)
     
     def __remove_outliers(self, measurements):
         filtered_measurements = []
@@ -127,19 +76,33 @@ class Simulation:
         robot_xy = self.robot.state[0:2,:]
         R_theta = np.block([[np.cos(th), -np.sin(th)],[np.sin(th), np.cos(th)]])
         for lm in measurements:
-            if lm.tag not in self.taglist:
+
+            if "aruco" in lm.tag:
                 filtered_measurements.append(lm)
                 continue
-            elif "aruco" in lm.tag:
-                filtered_measurements.append(lm)
+                
+            if abs(lm.position[0]) > 1.5 or abs(lm.position[1] > 1.5):
                 continue
-            index = self.taglist[lm.tag]
+            
+            fruit_type = lm.tag
             fruit_pos = robot_xy + R_theta @ lm.position
-            dx = self.landmarks[0, index] - fruit_pos[0]
-            dy = self.landmarks[1, index] - fruit_pos[1]
-            dist = math.sqrt(dx * dx + dy * dy)
-            if dist <= 1:
+
+            matching_fruit, dist, num_of_matching_fruit = self.__find_fruit(fruit_type, fruit_pos)
+
+            if num_of_matching_fruit == 0:
+                lm.tag += "_0"
                 filtered_measurements.append(lm)
+                continue
+            
+            is_target_fruit = any(target_fruit in lm.tag for target_fruit in self.target_list)
+
+            if is_target_fruit:
+                lm.tag = matching_fruit
+            elif dist <= 0.4 or num_of_matching_fruit >= 2:
+                lm.tag = matching_fruit
+            else:
+                lm.tag += f"_{num_of_matching_fruit}"
+            filtered_measurements.append(lm)
         return filtered_measurements
 
     def __add_landmarks(self, measurements):
@@ -161,39 +124,35 @@ class Simulation:
             self.P[-2,-2] = self.init_lm_cov**2
             self.P[-1,-1] = self.init_lm_cov**2
     
-    # def save_map(self, fname="slam_map.txt"):
-    #     if self.number_landmarks() > 0:
-    #         utils = MappingUtils(self.markers, self.P[5:,5:], self.taglist)
-    #         utils.save(fname)
     def find_fruit_index(self, fruit_name):
-        # lowest_coveriance = 10000
-        # best_guess = -1
         for key in self.taglist:
             if fruit_name in key:
                 return self.taglist[key]
-                # cov = self.P[self.taglist[key], self.taglist[key]]
-                # if cov < lowest_coveriance:
-                #     lowest_coveriance = cov
-                #     best_guess = self.taglist[key]
-                # return self.taglist[key]
         return -1
 
-    def detect_imminent_collision(self, dt = 0.5, radius = 0.2):
-        pos = self.get_position()
-        th = self.get_angle()
-        lin_vel = self.robot.state[3, 0] * dt
-        future_x = pos[0] + lin_vel * math.cos(th)
-        future_y = pos[1] + lin_vel * math.sin(th)
-        return self.check_collision(future_x, future_y, radius)
-
-    def check_collision(self, x, y, radius):
-        for i in range(self.landmarks.shape[1]):
-            dx = x - self.landmarks[0,i]
-            dy = y - self.landmarks[1,i]
-            dist = np.sqrt(dx * dx + dy * dy)
-            if dist <= radius:
-                return True # Collision
-        return False # Safe
+    def check_collision(self, x, y, dx = 0, dy = 0, radius_multiplier = 1):
+        if dx == 0 and dy == 0:
+            # Simple collision check
+            for i in range(self.landmarks.shape[1]):
+                dist = np.sqrt((x - self.landmarks[0,i])**2 + (y - self.landmarks[1,i])**2)
+                if dist <= self.obstacle_radius * radius_multiplier:
+                    return True # Collision
+            return False # Safe
+        else:
+            # Direction based collision check
+            for i in range(self.landmarks.shape[1]):
+                dx2 = self.landmarks[0,i] - x
+                dy2 = self.landmarks[1,i] - y
+                dist = np.sqrt(dx2*dx2 + dy2*dy2)
+                dx2 /= dist
+                dy2 /= dist
+                length = np.sqrt(dx*dx + dy*dy)
+                dx /= length
+                dy /= length
+                dot_product = dx * dx2 + dy * dy2
+                if dist <= (self.obstacle_radius * radius_multiplier) and dot_product > 0:
+                    return True # Collision
+            return False # Safe
 
     def get_position(self):
         return self.robot.get_position()
@@ -209,10 +168,10 @@ class Simulation:
 
     def update(self, measurements):
         #self.__find_fruit(measurements)
-        self.__add_landmarks(measurements)
         measurements = self.__remove_outliers(measurements)
         if not measurements:
             return
+        self.__add_landmarks(measurements)
         # Construct measurement index list
         tags = [lm.tag for lm in measurements]
         idx_list = [self.taglist[tag] for tag in tags]
@@ -231,6 +190,30 @@ class Simulation:
         x = x + K @ (z - z_hat)
         self.P = (np.eye(x.shape[0]) - K @ C) @ self.P
         self.__set_state_vector(x)
+    
+    def get_slam_output(self):
+        tags = [tag for tag in self.taglist if "aruco" in tag]
+        taglist = [int(tag[5:-2]) for tag in tags]
+        indices = [self.taglist[tag] for tag in tags]
+        markers = self.landmarks[:, indices].tolist()
+        covariance = self.landmarks[:, indices].tolist()
+        slam = {
+            "taglist": taglist,
+            "map": markers,
+            "covariance": covariance
+        }
+        return slam
+
+    def get_targets_output(self):
+        targets = {}
+        fruits = [tag for tag in self.taglist if "aruco" not in tag]
+        for fruit in fruits:
+            index = self.taglist[fruit]
+            targets[fruit] = {
+                "y": self.landmarks[1, index],
+                "x": self.landmarks[0, index]
+            }
+        return targets
 
 class SimRobot:
     def __init__(self, wheels_width, wheels_scale):
