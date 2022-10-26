@@ -5,10 +5,11 @@ import cv2
 import os, sys
 
 from util.landmark import Landmark
+from util.settings import Settings
 
 class ArucoDetector:
-    def __init__(self, camera_matrix, marker_length=0.07, distortion_params = np.zeros((1, 5))):
-        self.camera_matrix = camera_matrix
+    def __init__(self, settings: Settings, marker_length=0.07, distortion_params = np.zeros((1, 5))):
+        self.settings = settings
         self.distortion_params = distortion_params
         self.marker_length = marker_length
         self.aruco_params = cv2.aruco.DetectorParameters_create()
@@ -17,7 +18,7 @@ class ArucoDetector:
     def detect_marker_positions(self, image):
         # Perform detection
         corners, ids, rejected = cv2.aruco.detectMarkers(image, self.aruco_dict, parameters = self.aruco_params)
-        rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.marker_length, self.camera_matrix, self.distortion_params)
+        rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.marker_length, self.settings.camera_matrix.value, self.distortion_params)
         # rvecs, tvecs = cv2.aruco.estimatePoseSingleMarkers(corners, self.marker_length, self.camera_matrix, self.distortion_params) # use this instead if you got a value error
         if ids is None:
             return [], image

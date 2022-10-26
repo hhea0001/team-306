@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from util.landmark import Landmark
+from util.settings import Settings
 
 FRUIT_TYPES = ["apple", "orange", "pear", "lemon", "strawberry"]
 FRUIT_SIZES = {
@@ -17,14 +18,15 @@ FRUIT_SIZES = {
 }
 
 class FruitDetector:
-    def __init__(self, model_name, camera_matrix, confidence = 0.75):
+    def __init__(self, model_name, settings: Settings):
         if model_name == '':
             self.model = None
         else:
             self.model = torch.hub.load('./yolov5', 'custom', path=model_name, source='local')
-        self.fov_x = 2 * np.arctan2(camera_matrix[0][2], camera_matrix[0][0])
-        self.fov_y = 2 * np.arctan2(camera_matrix[1][2], camera_matrix[1][1])
-        self.confidence = confidence
+        self.settings = settings
+        self.i00 = settings.camera_matrix.value[0][0]
+        self.fov_x = 2 * np.arctan2(self.settings.camera_matrix.value[0][2], self.settings.camera_matrix.value[0][0])
+        self.fov_y = 2 * np.arctan2(self.settings.camera_matrix.value[1][2], self.settings.camera_matrix.value[1][1])
     
     def detect_fruit_positions(self, image_array, marked_image):
         if self.model == None:
@@ -35,8 +37,14 @@ class FruitDetector:
         labels, coords, confidences, names = results.xyxyn[0][:, -1], results.xyxyn[0][:, :-1], results.xyxyn[0][:, 4], results.names
         # Setup results array
         landmarks: List[Landmark] = []
+
+        if len(labels) > 0 and self.i00 != self.settings.camera_matrix.value[0][0]:
+            self.i00 = self.settings.camera_matrix.value[0][0]
+            self.fov_x = 2 * np.arctan2(self.settings.camera_matrix.value[0][2], self.settings.camera_matrix.value[0][0])
+            self.fov_y = 2 * np.arctan2(self.settings.camera_matrix.value[1][2], self.settings.camera_matrix.value[1][1])
+
         for i, label in enumerate(labels):
-            if (confidences[i] < self.confidence):
+            if (confidences[i] < self.settings.confidence.value):
                 continue
             xmin, ymin, xmax, ymax = coords[i][0].item(), coords[i][1].item(), coords[i][2].item(), coords[i][3].item()
             name = names[label.item()]

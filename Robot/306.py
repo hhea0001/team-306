@@ -13,6 +13,7 @@ from util.landmark import Landmark
 from util.pibot import PenguinPi as Robot
 from util.pid import RobotPID
 from util.planning2 import Bounds, Planner, Plan
+from util.settings import Settings
 from util.sim import Simulation, SimRobot
 from util.window import Window
 from util.aruco import ArucoDetector
@@ -20,6 +21,10 @@ import util.window as win
 
 class Team306:
     def __init__(self, ip, port, map_data, search_list, camera_matrix, scale, baseline, fruit_model, obstacle_radius, speed, confidence, max_dist, max_target_dist):
+        self.settings = Settings(
+            camera_matrix = camera_matrix,
+            confidence = confidence
+        )
         # Setup robot
         self.robot = Robot(
             ip = ip, 
@@ -60,12 +65,11 @@ class Team306:
         self.search_fruit_name = "NONE"
         self.search_fruit_index = 0
         # Setup aruco detector
-        self.aruco_detector = ArucoDetector(camera_matrix)
+        self.aruco_detector = ArucoDetector(self.settings)
         # Setup fruit detector
         self.fruit_detector = FruitDetector(
-            model_name = fruit_model, 
-            camera_matrix = camera_matrix, 
-            confidence = confidence
+            model_name = fruit_model,
+            settings = self.settings
         )
         # Initialise time
         self.previous_time = time.time()
@@ -209,12 +213,20 @@ class Team306:
                 down = event.type == pygame.KEYDOWN
                 if event.key == pygame.K_UP:
                     self.wasd[0] = down
-                elif event.key == pygame.K_DOWN:
-                    self.wasd[2] = down
                 elif event.key == pygame.K_LEFT:
                     self.wasd[1] = down
+                elif event.key == pygame.K_DOWN:
+                    self.wasd[2] = down
                 elif event.key == pygame.K_RIGHT:
                     self.wasd[3] = down
+                elif event.key == pygame.K_LEFTBRACKET and down:
+                    self.settings.up()
+                elif event.key == pygame.K_MINUS and down:
+                    self.settings.left()
+                elif event.key == pygame.K_RIGHTBRACKET and down:
+                    self.settings.down()
+                elif event.key == pygame.K_EQUALS and down:
+                    self.settings.right()
     
     def plan(self):
         if time.time() < self.start_time + 10:
@@ -341,7 +353,7 @@ if __name__ == "__main__":
         team306.drive()
         team306.view()
         
-        window.draw(team306.sim, team306.marked_image, team306.current_plan)
+        window.draw(team306.sim, team306.marked_image, team306.current_plan, team306.settings)
         window.update()
 
         if team306.quit:

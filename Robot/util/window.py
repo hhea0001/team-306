@@ -5,6 +5,7 @@ import pygame
 import pygame.display as display
 from util.planning2 import Plan
 from util.sim import SimRobot, Simulation
+from util.settings import Settings
 
 TEXT_LEFT = 0
 TEXT_RIGHT = 1
@@ -108,12 +109,19 @@ class Window:
         view = pygame.transform.smoothscale(view, (272, 204))
         view = pygame.transform.flip(view, True, False)
         self.canvas.blit(view, (4,316))
+    
+    def draw_settings(self, settings: Settings):
+        base_height = 200
+        for i in range(len(settings.settings)):
+            self.draw_text(str(settings.settings[i]), (30, i * 30 + base_height))
+        pygame.draw.circle(self.canvas, (255, 255, 255), (15, settings.setting_selection * 30 + base_height + 16), 4, 2)
 
-    def draw(self, simulation: Simulation, marked_image: np.ndarray, plan: Plan):
+    def draw(self, simulation: Simulation, marked_image: np.ndarray, plan: Plan, settings: Settings):
         self.draw_background()
         self.draw_camera(marked_image)
         self.draw_landmarks(simulation.taglist, simulation.landmarks)
         self.draw_robot(simulation.robot)
+        self.draw_settings(settings)
         if plan != None and len(plan.path) > 0:
             self.draw_plan(plan.path)
         pos = simulation.get_position()
